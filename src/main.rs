@@ -14,6 +14,8 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
+    install_panic_hook();
+
     // Preferência por menor consumo; em Windows antigo pode cair no WARP (software).
     std::env::set_var("WGPU_POWER_PREF", "low");
 
@@ -71,6 +73,20 @@ fn main() -> eframe::Result<()> {
         show_startup_error(&error_message);
         wgpu_run
     }
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let message = format!(
+            "Pânico fatal ao iniciar/rodar o Notarium:
+{}
+
+Veja notarium.log para detalhes.",
+            panic_info
+        );
+        let _ = std::fs::write("notarium.log", &message);
+        show_startup_error(&message);
+    }));
 }
 
 fn run_notarium(options: eframe::NativeOptions) -> eframe::Result<()> {

@@ -22,6 +22,7 @@ Notarium é um editor de partituras em Rust com foco em Linux e Windows.
 - Se falhar, no Windows tenta **WGPU + DirectX com fallback adapter** (`WGPU_FORCE_FALLBACK_ADAPTER=1`) para usar WARP/software.
 - Se ainda falhar, tenta **WGPU + backend OpenGL** (`WGPU_BACKEND=gl`).
 - Se todas as tentativas falharem, gera `notarium.log` ao lado do executável com diagnóstico técnico das três tentativas e mostra um pop-up de erro no Windows.
+- Se ocorrer pânico fatal em runtime, o app também grava `notarium.log` e mostra pop-up de erro.
 
 ## Windows portable via GitHub Actions
 
