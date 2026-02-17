@@ -1,6 +1,6 @@
 # Notarium
 
-Notarium é um editor de partituras em Rust com foco em Linux e Windows.
+Notarium é um editor de partituras em Rust com foco em Windows x64.
 
 ## O que já está implementado
 
@@ -10,11 +10,11 @@ Notarium é um editor de partituras em Rust com foco em Linux e Windows.
 - Inserção de notas (altura, oitava, duração e instrumento).
 - Renderização básica de pauta e cabeças de nota.
 - Playback com síntese digital em tempo real e presets de instrumentos orquestrais.
-- Pipeline de CI em GitHub Actions para validar build, testes e gerar binários.
+- Pipeline de CI em GitHub Actions para validar build, testes e gerar binário portable Windows x64.
 
 ## Requisitos de arquitetura
 
-- O Notarium é suportado apenas em **x64 (64-bit)** no Windows e Linux.
+- O Notarium é suportado apenas em **Windows x64 (64-bit)**.
 
 ## Compatibilidade com PCs antigos (sem aceleração GPU)
 
