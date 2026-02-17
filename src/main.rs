@@ -25,7 +25,18 @@ fn main() -> eframe::Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        // Tenta backend OpenGL no WGPU para GPUs antigas.
+        // Tenta backend DirectX, forçando adaptador de fallback (WARP/software).
+        std::env::set_var("WGPU_BACKEND", "dx12,dx11");
+        std::env::set_var("WGPU_FORCE_FALLBACK_ADAPTER", "1");
+        let wgpu_warp_run = run_notarium(eframe::NativeOptions {
+            renderer: eframe::Renderer::Wgpu,
+            ..Default::default()
+        });
+        if wgpu_warp_run.is_ok() {
+            return wgpu_warp_run;
+        }
+
+        // Tenta OpenGL dentro do WGPU como último recurso sem depender do glow/glutin ES.
         std::env::set_var("WGPU_BACKEND", "gl");
         let wgpu_gl_run = run_notarium(eframe::NativeOptions {
             renderer: eframe::Renderer::Wgpu,
@@ -35,27 +46,17 @@ fn main() -> eframe::Result<()> {
             return wgpu_gl_run;
         }
 
-        // Fallback final: renderer Glow com aceleração desativada (software quando disponível).
-        let glow_run = run_notarium(eframe::NativeOptions {
-            renderer: eframe::Renderer::Glow,
-            hardware_acceleration: eframe::HardwareAcceleration::Off,
-            ..Default::default()
-        });
-        if glow_run.is_ok() {
-            return glow_run;
-        }
-
         let _ = std::fs::write(
             "notarium.log",
             format!(
-                "Falha ao iniciar Notarium (WGPU): {:?}\nFalha WGPU(OpenGL): {:?}\nFalha Glow(software): {:?}\n",
+                "Falha ao iniciar Notarium (WGPU padrão): {:?}\nFalha WGPU(WARP fallback): {:?}\nFalha WGPU(OpenGL): {:?}\n",
                 wgpu_run.as_ref().err(),
-                wgpu_gl_run.as_ref().err(),
-                glow_run.as_ref().err()
+                wgpu_warp_run.as_ref().err(),
+                wgpu_gl_run.as_ref().err()
             ),
         );
 
-        glow_run
+        wgpu_gl_run
     }
 
     #[cfg(not(target_os = "windows"))]
