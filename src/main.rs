@@ -42,7 +42,7 @@ fn main() -> eframe::Result<()> {
             ..Default::default()
         });
         if glow_run.is_ok() {
-            glow_run
+            return glow_run;
         }
 
         let _ = std::fs::write(
