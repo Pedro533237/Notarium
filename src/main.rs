@@ -42,7 +42,7 @@ fn main() -> eframe::Result<()> {
             ..Default::default()
         });
         if glow_run.is_ok() {
-            return glow_run;
+            glow_run
         }
 
         let _ = std::fs::write(
@@ -55,7 +55,7 @@ fn main() -> eframe::Result<()> {
             ),
         );
 
-        return glow_run;
+        glow_run
     }
 
     #[cfg(not(target_os = "windows"))]
