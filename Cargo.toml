@@ -1,0 +1,12 @@
+[package]
+name = "notarium"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = { version = "0.27", default-features = true }
+egui = "0.27"
+rodio = "0.17"
+
+[dev-dependencies]
+approx = "0.5"
