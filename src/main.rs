@@ -14,12 +14,11 @@ fn main() -> eframe::Result<()> {
     // Preferência por menor consumo; em Windows antigo pode cair no WARP (software).
     std::env::set_var("WGPU_POWER_PREF", "low");
 
-    let wgpu_options = eframe::NativeOptions {
+    let wgpu_run = run_notarium(eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
-    };
+    });
 
-    let wgpu_run = run_notarium(wgpu_options);
     if wgpu_run.is_ok() {
         return wgpu_run;
     }
@@ -50,9 +49,9 @@ fn main() -> eframe::Result<()> {
             "notarium.log",
             format!(
                 "Falha ao iniciar Notarium (WGPU): {:?}\nFalha WGPU(OpenGL): {:?}\nFalha Glow(software): {:?}\n",
-                wgpu_run.err(),
-                wgpu_gl_run.err(),
-                glow_run.err()
+                wgpu_run.as_ref().err(),
+                wgpu_gl_run.as_ref().err(),
+                glow_run.as_ref().err()
             ),
         );
 
@@ -61,7 +60,10 @@ fn main() -> eframe::Result<()> {
 
     let _ = std::fs::write(
         "notarium.log",
-        format!("Falha ao iniciar Notarium (WGPU): {:?}\n", wgpu_run.err()),
+        format!(
+            "Falha ao iniciar Notarium (WGPU): {:?}\n",
+            wgpu_run.as_ref().err()
+        ),
     );
     wgpu_run
 }
@@ -284,7 +286,7 @@ impl NotariumApp {
                 }
 
                 if ui.button("Play (síntese)").clicked() {
-                    audio::play_score(&self.score, self.bpm);
+                    audio::play_score(self.score.clone(), self.bpm);
                 }
 
                 ui.separator();
@@ -294,7 +296,7 @@ impl NotariumApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Visualização da Partitura");
             ui.separator();
-            notation::draw_score(ui, &self.score, self.settings.time_signature);
+            notation::draw_score(ui, &self.score);
         });
     }
 }

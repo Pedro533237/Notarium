@@ -7,6 +7,8 @@ pub enum DurationValue {
 }
 
 impl DurationValue {
+    pub const ALL: [Self; 4] = [Self::Whole, Self::Half, Self::Quarter, Self::Eighth];
+
     pub fn beats(self) -> f32 {
         match self {
             Self::Whole => 4.0,
