@@ -11,7 +11,9 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions::default();
+    let mut options = eframe::NativeOptions::default();
+    options.renderer = eframe::Renderer::Glow;
+
     eframe::run_native(
         "Notarium",
         options,

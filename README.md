@@ -23,6 +23,11 @@ Passos:
 4. Extraia o `.zip`.
 5. Rode `notarium.exe` (sem instalador, estilo portable).
 
+
+## Solução para app que não abre no Windows
+
+Se o `.exe` não abrir em alguns PCs, esta versão força backend gráfico **Glow/OpenGL** para maior compatibilidade com drivers antigos e GPUs sem suporte estável a backends mais novos.
+
 ## Limites atuais
 
 Este repositório é um **MVP técnico**. Ainda não cobre 100% da notação completa de ferramentas como Sibelius/MuseScore (articulações avançadas, layout editorial completo, VST, MusicXML completo, etc.).
