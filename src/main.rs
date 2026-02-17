@@ -11,14 +11,25 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
-    let mut options = eframe::NativeOptions::default();
-    options.renderer = eframe::Renderer::Glow;
+    let options = eframe::NativeOptions {
+        renderer: eframe::Renderer::Glow,
+        ..Default::default()
+    };
 
-    eframe::run_native(
+    let run = eframe::run_native(
         "Notarium",
         options,
         Box::new(|_cc| Box::<NotariumApp>::default()),
-    )
+    );
+
+    if let Err(err) = &run {
+        let _ = std::fs::write(
+            "notarium.log",
+            format!("Falha ao iniciar Notarium: {err:?}\n"),
+        );
+    }
+
+    run
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

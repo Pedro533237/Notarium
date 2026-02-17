@@ -23,10 +23,13 @@ Passos:
 4. Extraia o `.zip`.
 5. Rode `notarium.exe` (sem instalador, estilo portable).
 
+Se ainda falhar em abrir, confira `notarium.log` na mesma pasta do executável.
 
-## Solução para app que não abre no Windows
+## Melhorias de velocidade de compilação
 
-Se o `.exe` não abrir em alguns PCs, esta versão força backend gráfico **Glow/OpenGL** para maior compatibilidade com drivers antigos e GPUs sem suporte estável a backends mais novos.
+- CI com cache (`Swatinem/rust-cache`) para reduzir tempo em builds repetidos.
+- Registro crates.io em modo `sparse` no workflow.
+- Dependências com features reduzidas para evitar compilar backends/decoders desnecessários.
 
 ## Limites atuais
 

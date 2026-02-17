@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
 jobs:
   build-and-test:
     strategy:
@@ -20,6 +24,9 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
 
       - name: Rustfmt check
         run: cargo fmt --check
@@ -60,7 +67,7 @@ jobs:
           1) Extraia este .zip em qualquer pasta.
           2) Execute notarium.exe.
 
-          Observação: build gerada com CRT estático para facilitar uso portátil.
+          Se não abrir, veja o arquivo notarium.log gerado na mesma pasta do executável.
           "@ | Set-Content dist/notarium-portable/README-PORTABLE.txt
           Compress-Archive -Path dist/notarium-portable/* -DestinationPath dist/notarium-windows-portable.zip -Force
 
