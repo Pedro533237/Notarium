@@ -6,7 +6,7 @@ Notarium é um editor de partituras em Rust com foco em Windows x64.
 
 - Tela de **Início** para criar nova partitura.
 - Configuração inicial de partitura: nome, compositor, tonalidade, fórmula de compasso e tamanho de papel.
-- Interface desktop com `egui` para edição.
+- Interface desktop com `egui` + `glium` (OpenGL puro) para edição.
 - Inserção de notas (altura, oitava, duração e instrumento).
 - Renderização básica de pauta e cabeças de nota.
 - Playback com síntese digital em tempo real e presets de instrumentos orquestrais.
@@ -18,11 +18,9 @@ Notarium é um editor de partituras em Rust com foco em Windows x64.
 
 ## Compatibilidade com PCs antigos (sem aceleração GPU)
 
-- O app usa **Glow (OpenGL)** como renderer principal (sem depender de WGPU).
-- Ordem de tentativa: **Glow Preferred** → **Glow Required** → **Glow Off (software)**.
-- Isso melhora a chance de abrir em PCs antigos com suporte até OpenGL 3.3 / DirectX 10.1.
-- Se todas as tentativas falharem, gera `notarium.log` ao lado do executável com diagnóstico técnico das tentativas e mostra um pop-up de erro no Windows.
-- Se ocorrer pânico fatal em runtime, o app também grava `notarium.log` e mostra pop-up de erro.
+- O app usa backend **OpenGL puro via `glium`** (sem WGPU/Vulkan).
+- Foi ajustado para focar em compatibilidade com PCs antigos que suportam até OpenGL 3.3 / DirectX 10.1.
+- Em falhas de inicialização/execução, o app grava `notarium.log` ao lado do executável e mostra um pop-up de erro no Windows.
 
 ## Windows portable via GitHub Actions
 

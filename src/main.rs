@@ -10,77 +10,85 @@ mod audio;
 mod music;
 mod notation;
 
-use eframe::egui;
+use egui::{self, ViewportBuilder};
+use egui_glium::EguiGlium;
+use glium::backend::glutin::SimpleWindowBuilder;
+use glium::winit;
+use glium::Surface;
 use music::{
     DurationValue, Instrument, KeySignature, NoteEvent, PaperSize, Pitch, PitchClass, Score,
     ScoreSettings, TimeSignature,
 };
 
-fn main() -> eframe::Result<()> {
-    let mut startup_errors = Vec::new();
+fn main() {
+    install_panic_hook();
 
-    // Renderer principal para hardware legado: OpenGL (Glow) com requisitos moderados.
-    if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
-        hardware_acceleration: eframe::HardwareAcceleration::Preferred,
-        ..Default::default()
-    }) {
-        startup_errors.push(format!("Falha ao iniciar Notarium (Glow Preferred): {err}"));
-    } else {
-        return Ok(());
-    }
-
-    // Fallback 1: força aceleração quando driver OpenGL estiver parcialmente disponível.
-    if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
-        hardware_acceleration: eframe::HardwareAcceleration::Required,
-        ..Default::default()
-    }) {
-        startup_errors.push(format!("Falha Glow(Required): {err}"));
-    } else {
-        return Ok(());
-    }
-
-    // Fallback 2: tenta modo sem aceleração para cenários muito antigos.
-    if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
-        hardware_acceleration: eframe::HardwareAcceleration::Off,
-        ..Default::default()
-    }) {
-        startup_errors.push(format!("Falha Glow(Off/software): {err}"));
-    } else {
-        return Ok(());
-    }
-
-    let error_message = startup_errors.join("\n") + "\n";
-    let _ = std::fs::write("notarium.log", &error_message);
-    show_startup_error(&error_message);
-    Ok(())
-}
-
-fn run_notarium_guarded(options: eframe::NativeOptions) -> Result<(), String> {
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_notarium(options))) {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(err)) => Err(format!("{err:?}")),
-        Err(panic_payload) => {
-            let message = if let Some(msg) = panic_payload.downcast_ref::<&str>() {
-                (*msg).to_string()
-            } else if let Some(msg) = panic_payload.downcast_ref::<String>() {
-                msg.clone()
-            } else {
-                "panic sem mensagem detalhada".to_owned()
-            };
-            Err(format!("panic capturado: {message}"))
-        }
+    if let Err(error_message) = run_notarium() {
+        let _ = std::fs::write("notarium.log", &error_message);
+        show_startup_error(&error_message);
     }
 }
 
-fn run_notarium(options: eframe::NativeOptions) -> eframe::Result<()> {
-    eframe::run_native(
-        "Notarium",
-        options,
-        Box::new(|_cc| Box::<NotariumApp>::default()),
-    )
+fn run_notarium() -> Result<(), String> {
+    let event_loop = winit::event_loop::EventLoop::builder()
+        .build()
+        .map_err(|err| format!("Falha ao criar event loop: {err}"))?;
+
+    let window_attributes = winit::window::Window::default_attributes()
+        .with_title("Notarium")
+        .with_inner_size(winit::dpi::PhysicalSize::new(1280, 800));
+
+    let viewport = ViewportBuilder::default().with_inner_size([1280.0, 800.0]);
+
+    let (window, display) = SimpleWindowBuilder::new()
+        .set_window_builder(window_attributes)
+        .with_config_template_builder(
+            glium::glutin::config::ConfigTemplateBuilder::new()
+                .with_hardware_acceleration(Some(true)),
+        )
+        .build(&event_loop);
+
+    let mut egui = EguiGlium::new(viewport, &display, &window, &event_loop);
+    let mut app = NotariumApp::default();
+
+    event_loop
+        .run(move |event, window_target| match event {
+            winit::event::Event::WindowEvent { event, .. } => {
+                let response = egui.on_event(&window, &event);
+
+                if response.repaint {
+                    window.request_redraw();
+                }
+
+                match event {
+                    winit::event::WindowEvent::CloseRequested => window_target.exit(),
+                    winit::event::WindowEvent::Resized(new_size) => {
+                        display.resize((new_size.width, new_size.height));
+                    }
+                    winit::event::WindowEvent::RedrawRequested => {
+                        egui.run(&window, |ctx| {
+                            app.update(ctx);
+                        });
+
+                        let mut target = display.draw();
+                        target.clear_color(0.07, 0.07, 0.08, 1.0);
+                        egui.paint(&display, &mut target);
+                        if let Err(err) = target.finish() {
+                            let message = format!("Falha ao finalizar frame OpenGL: {err}");
+                            let _ = std::fs::write("notarium.log", &message);
+                            show_startup_error(&message);
+                            window_target.exit();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            winit::event::Event::AboutToWait => {
+                window.request_redraw();
+            }
+            _ => {}
+        })
+        .map_err(|err| format!("Falha no loop principal da janela: {err}"))
 }
 
 #[cfg(target_os = "windows")]
@@ -128,6 +136,14 @@ fn show_startup_error(message: &str) {
     eprintln!("{}", message);
 }
 
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        let message = format!("Pânico fatal ao iniciar/rodar o Notarium:\n{panic_info}");
+        let _ = std::fs::write("notarium.log", &message);
+        show_startup_error(&message);
+    }));
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AppScreen {
     Start,
@@ -172,16 +188,14 @@ impl Default for NotariumApp {
     }
 }
 
-impl eframe::App for NotariumApp {
-    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+impl NotariumApp {
+    fn update(&mut self, ctx: &egui::Context) {
         match self.screen {
             AppScreen::Start => self.render_start_screen(ctx),
             AppScreen::Editor => self.render_editor(ctx),
         }
     }
-}
 
-impl NotariumApp {
     fn render_start_screen(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
