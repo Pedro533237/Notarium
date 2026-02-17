@@ -17,59 +17,39 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
-    // Preferência por menor consumo; em Windows antigo pode cair em caminho de software.
-    std::env::set_var("WGPU_POWER_PREF", "low");
-
     let mut startup_errors = Vec::new();
 
+    // Renderer principal para hardware legado: OpenGL (Glow) com requisitos moderados.
     if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-        renderer: eframe::Renderer::Wgpu,
+        renderer: eframe::Renderer::Glow,
+        hardware_acceleration: eframe::HardwareAcceleration::Preferred,
         ..Default::default()
     }) {
-        startup_errors.push(format!("Falha ao iniciar Notarium (WGPU padrão): {err}"));
+        startup_errors.push(format!("Falha ao iniciar Notarium (Glow Preferred): {err}"));
     } else {
         return Ok(());
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        // Tenta caminho mais estável para máquinas antigas no Windows (DX11 + fallback adapter).
-        std::env::set_var("WGPU_BACKEND", "dx11");
-        std::env::set_var("WGPU_FORCE_FALLBACK_ADAPTER", "1");
+    // Fallback 1: força aceleração quando driver OpenGL estiver parcialmente disponível.
+    if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
+        renderer: eframe::Renderer::Glow,
+        hardware_acceleration: eframe::HardwareAcceleration::Required,
+        ..Default::default()
+    }) {
+        startup_errors.push(format!("Falha Glow(Required): {err}"));
+    } else {
+        return Ok(());
+    }
 
-        if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-            renderer: eframe::Renderer::Wgpu,
-            ..Default::default()
-        }) {
-            startup_errors.push(format!("Falha WGPU(DX11/WARP fallback): {err}"));
-        } else {
-            return Ok(());
-        }
-
-        std::env::remove_var("WGPU_FORCE_FALLBACK_ADAPTER");
-        std::env::remove_var("WGPU_BACKEND");
-
-        // Fallback para Glow com aceleração preferida (evita exigir contexto ES específico).
-        if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-            renderer: eframe::Renderer::Glow,
-            hardware_acceleration: eframe::HardwareAcceleration::Preferred,
-            ..Default::default()
-        }) {
-            startup_errors.push(format!("Falha Glow(Preferred): {err}"));
-        } else {
-            return Ok(());
-        }
-
-        // Último fallback: Glow com aceleração requerida.
-        if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-            renderer: eframe::Renderer::Glow,
-            hardware_acceleration: eframe::HardwareAcceleration::Required,
-            ..Default::default()
-        }) {
-            startup_errors.push(format!("Falha Glow(Required): {err}"));
-        } else {
-            return Ok(());
-        }
+    // Fallback 2: tenta modo sem aceleração para cenários muito antigos.
+    if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
+        renderer: eframe::Renderer::Glow,
+        hardware_acceleration: eframe::HardwareAcceleration::Off,
+        ..Default::default()
+    }) {
+        startup_errors.push(format!("Falha Glow(Off/software): {err}"));
+    } else {
+        return Ok(());
     }
 
     let error_message = startup_errors.join("\n") + "\n";
