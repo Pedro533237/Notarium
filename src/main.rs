@@ -11,8 +11,12 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
+    // Ajuda em PCs antigos sem aceleração de GPU: deixa o wgpu escolher backend compatível.
+    // Em várias máquinas Windows antigas, isso cai em caminho de software (WARP).
+    std::env::set_var("WGPU_POWER_PREF", "low");
+
     let options = eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
 
@@ -25,8 +29,31 @@ fn main() -> eframe::Result<()> {
     if let Err(err) = &run {
         let _ = std::fs::write(
             "notarium.log",
-            format!("Falha ao iniciar Notarium: {err:?}\n"),
+            format!("Falha ao iniciar Notarium (WGPU): {err:?}\n"),
         );
+
+        // Fallback para Glow/OpenGL caso WGPU falhe.
+        let fallback_options = eframe::NativeOptions {
+            renderer: eframe::Renderer::Glow,
+            ..Default::default()
+        };
+
+        let fallback = eframe::run_native(
+            "Notarium",
+            fallback_options,
+            Box::new(|_cc| Box::<NotariumApp>::default()),
+        );
+
+        if let Err(fallback_err) = &fallback {
+            let _ = std::fs::write(
+                "notarium.log",
+                format!(
+                    "Falha ao iniciar Notarium (WGPU): {err:?}\nFalha no fallback Glow: {fallback_err:?}\n"
+                ),
+            );
+        }
+
+        return fallback;
     }
 
     run

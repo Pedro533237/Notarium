@@ -37,16 +37,8 @@ jobs:
       - name: Test
         run: cargo test --all-targets
 
-      - name: Build release (Linux)
-        if: runner.os == 'Linux'
+      - name: Build release
         run: cargo build --release
-
-      - name: Build release (Windows static CRT)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:RUSTFLAGS = "-C target-feature=+crt-static"
-          cargo build --release
 
       - name: Upload Linux artifact
         if: runner.os == 'Linux'
@@ -68,6 +60,10 @@ jobs:
           2) Execute notarium.exe.
 
           Se não abrir, veja o arquivo notarium.log gerado na mesma pasta do executável.
+
+          Observação sobre antivírus/Defender:
+          - Este binário não é assinado digitalmente.
+          - Em alguns PCs, o Defender pode alertar por reputação (SmartScreen).
           "@ | Set-Content dist/notarium-portable/README-PORTABLE.txt
           Compress-Archive -Path dist/notarium-portable/* -DestinationPath dist/notarium-windows-portable.zip -Force
 
