@@ -152,8 +152,15 @@ enum AppScreen {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UiTab {
+    File,
     Home,
-    Playback,
+    NoteInput,
+    Notations,
+    Play,
+    Layout,
+    Appearance,
+    Parts,
+    Review,
     View,
 }
 
@@ -174,6 +181,8 @@ struct NotariumApp {
     active_tab: UiTab,
     playback: audio::PlaybackController,
     is_paused: bool,
+    orchestral_order: Vec<Instrument>,
+    zoom_percent: f32,
 }
 
 impl Default for NotariumApp {
@@ -197,6 +206,18 @@ impl Default for NotariumApp {
             active_tab: UiTab::Home,
             playback: audio::create_playback_controller(),
             is_paused: false,
+            orchestral_order: vec![
+                Instrument::Flute,
+                Instrument::Clarinet,
+                Instrument::Horn,
+                Instrument::Trumpet,
+                Instrument::Violin,
+                Instrument::Viola,
+                Instrument::Cello,
+                Instrument::Timpani,
+                Instrument::Piano,
+            ],
+            zoom_percent: 62.5,
         }
     }
 }
@@ -279,6 +300,90 @@ impl NotariumApp {
     fn render_editor(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
+                for (tab, label) in [
+                    (UiTab::File, "File"),
+                    (UiTab::Home, "Home"),
+                    (UiTab::NoteInput, "Note Input"),
+                    (UiTab::Notations, "Notations"),
+                    (UiTab::Play, "Play"),
+                    (UiTab::Layout, "Layout"),
+                    (UiTab::Appearance, "Appearance"),
+                    (UiTab::Parts, "Parts"),
+                    (UiTab::Review, "Review"),
+                    (UiTab::View, "View"),
+                ] {
+                    ui.selectable_value(&mut self.active_tab, tab, label);
+                }
+            });
+
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.group(|ui| {
+                    ui.label("Clipboard");
+                    ui.horizontal(|ui| {
+                        let _ = ui.button("Paste");
+                        let _ = ui.button("Copy");
+                        let _ = ui.button("Cut");
+                    });
+                });
+
+                ui.group(|ui| {
+                    ui.label("Instruments");
+                    ui.horizontal(|ui| {
+                        let _ = ui.button("Add");
+                        let _ = ui.button("Remove");
+                        let _ = ui.button("Transpose");
+                    });
+                });
+
+                ui.group(|ui| {
+                    ui.label("Bars / View");
+                    ui.horizontal(|ui| {
+                        let _ = ui.button("Split");
+                        let _ = ui.button("Join");
+                        ui.add(
+                            egui::Slider::new(&mut self.zoom_percent, 40.0..=140.0).text("Zoom"),
+                        );
+                    });
+                });
+
+                ui.group(|ui| {
+                    ui.label("Playback");
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("⏮ Retroceder").clicked() {
+                            self.playback.rewind();
+                            self.is_paused = false;
+                        }
+
+                        if ui.button("▶ Play").clicked() {
+                            self.playback.play(self.score.clone(), self.bpm);
+                            self.is_paused = false;
+                        }
+
+                        let pause_label = if self.is_paused {
+                            "⏵ Retomar"
+                        } else {
+                            "⏸ Pausar"
+                        };
+                        if ui.button(pause_label).clicked() {
+                            if self.is_paused {
+                                self.playback.resume();
+                            } else {
+                                self.playback.pause();
+                            }
+                            self.is_paused = !self.is_paused;
+                        }
+
+                        if ui.button("⏹ Parar").clicked() {
+                            self.playback.stop();
+                            self.is_paused = false;
+                        }
+                    });
+                });
+            });
+
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
                 ui.heading(self.settings.title.as_str());
                 ui.separator();
                 ui.label(format!("Compositor: {}", self.settings.composer));
@@ -294,55 +399,15 @@ impl NotariumApp {
                 ));
                 ui.separator();
                 ui.label(format!("Papel: {}", self.settings.paper_size.label()));
-            });
-
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.active_tab, UiTab::Home, "Início");
-                ui.selectable_value(&mut self.active_tab, UiTab::Playback, "Playback");
-                ui.selectable_value(&mut self.active_tab, UiTab::View, "Visualização");
-                ui.separator();
-                if ui.button("← Voltar para Início").clicked() {
-                    self.screen = AppScreen::Start;
-                }
-            });
-
-            ui.separator();
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("⏮ Retroceder").clicked() {
-                    self.playback.rewind();
-                    self.is_paused = false;
-                }
-
-                if ui.button("▶ Play").clicked() {
-                    self.playback.play(self.score.clone(), self.bpm);
-                    self.is_paused = false;
-                }
-
-                let pause_label = if self.is_paused {
-                    "⏵ Retomar"
-                } else {
-                    "⏸ Pausar"
-                };
-                if ui.button(pause_label).clicked() {
-                    if self.is_paused {
-                        self.playback.resume();
-                    } else {
-                        self.playback.pause();
-                    }
-                    self.is_paused = !self.is_paused;
-                }
-
-                if ui.button("⏹ Parar").clicked() {
-                    self.playback.stop();
-                    self.is_paused = false;
-                }
-
                 ui.separator();
                 ui.label(format!(
                     "Compassos: {:.1}",
                     self.score.total_measures(self.settings.time_signature)
                 ));
+                ui.separator();
+                if ui.button("← Voltar para Início").clicked() {
+                    self.screen = AppScreen::Start;
+                }
             });
         });
 
@@ -414,29 +479,44 @@ impl NotariumApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Visualização da Partitura");
+            ui.heading("Visualização Orquestral");
             ui.separator();
 
-            match self.active_tab {
-                UiTab::Home => {
-                    ui.label("Aba Início: edição principal e inserção de notas.");
-                }
-                UiTab::Playback => {
-                    ui.label(
-                        "Aba Playback: use Play, Pausa, Retroceder e Parar na faixa superior.",
+            egui::ScrollArea::both().show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    notation::draw_orchestral_page(
+                        ui,
+                        &self.score,
+                        &self.orchestral_order,
+                        "Movement II (excerpt) - Page 1",
+                        self.zoom_percent,
                     );
-                }
-                UiTab::View => {
-                    ui.label("Aba Visualização: foco na leitura da pauta.");
-                }
-            }
 
-            ui.add_space(8.0);
-            egui::Frame::canvas(ui.style())
-                .fill(egui::Color32::from_rgb(250, 250, 247))
-                .show(ui, |ui| {
-                    notation::draw_score(ui, &self.score);
+                    ui.add_space(24.0);
+
+                    notation::draw_orchestral_page(
+                        ui,
+                        &self.score,
+                        &self.orchestral_order,
+                        "Movement II (excerpt) - Page 2",
+                        self.zoom_percent,
+                    );
                 });
+            });
+        });
+
+        egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Page 1 of 2");
+                ui.separator();
+                ui.label(format!("Bars: {}", self.score.notes.len().max(1)));
+                ui.separator();
+                ui.label("No Selection");
+                ui.separator();
+                ui.label("Transposing Score");
+                ui.separator();
+                ui.label(format!("Zoom: {:.1}%", self.zoom_percent));
+            });
         });
     }
 }
