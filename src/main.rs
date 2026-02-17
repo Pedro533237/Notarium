@@ -1,5 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("Notarium suporta apenas arquiteturas x64 (64-bit).");
+
 mod audio;
 mod music;
 mod notation;
