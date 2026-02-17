@@ -47,18 +47,18 @@ fn run_notarium() -> Result<(), String> {
 
     #[allow(deprecated)]
     event_loop
-        .run(move |event, window_target| match event {
-            winit::event::Event::WindowEvent { event, .. } => {
-                let response = egui.on_event(&window, &event);
+        .run(move |event, window_target| {
+            window_target.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-                if response.repaint {
-                    window.request_redraw();
-                }
-
-                match event {
-                    winit::event::WindowEvent::CloseRequested => window_target.exit(),
+            match event {
+                winit::event::Event::WindowEvent { event, .. } => match event {
+                    winit::event::WindowEvent::CloseRequested
+                    | winit::event::WindowEvent::Destroyed => {
+                        window_target.exit();
+                    }
                     winit::event::WindowEvent::Resized(new_size) => {
                         display.resize((new_size.width, new_size.height));
+                        window.request_redraw();
                     }
                     winit::event::WindowEvent::RedrawRequested => {
                         egui.run(&window, |ctx| {
@@ -75,13 +75,18 @@ fn run_notarium() -> Result<(), String> {
                             window_target.exit();
                         }
                     }
-                    _ => {}
+                    other => {
+                        let response = egui.on_event(&window, &other);
+                        if response.repaint {
+                            window.request_redraw();
+                        }
+                    }
+                },
+                winit::event::Event::AboutToWait => {
+                    window.request_redraw();
                 }
+                _ => {}
             }
-            winit::event::Event::AboutToWait => {
-                window.request_redraw();
-            }
-            _ => {}
         })
         .map_err(|err| format!("Falha no loop principal da janela: {err}"))
 }
