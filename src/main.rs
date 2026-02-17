@@ -46,28 +46,26 @@ fn main() -> eframe::Result<()> {
             return wgpu_gl_run;
         }
 
-        let _ = std::fs::write(
-            "notarium.log",
-            format!(
-                "Falha ao iniciar Notarium (WGPU padrão): {:?}\nFalha WGPU(WARP fallback): {:?}\nFalha WGPU(OpenGL): {:?}\n",
-                wgpu_run.as_ref().err(),
-                wgpu_warp_run.as_ref().err(),
-                wgpu_gl_run.as_ref().err()
-            ),
+        let error_message = format!(
+            "Falha ao iniciar Notarium (WGPU padrão): {:?}\nFalha WGPU(WARP fallback): {:?}\nFalha WGPU(OpenGL): {:?}\n",
+            wgpu_run.as_ref().err(),
+            wgpu_warp_run.as_ref().err(),
+            wgpu_gl_run.as_ref().err()
         );
+        let _ = std::fs::write("notarium.log", &error_message);
+        show_startup_error(&error_message);
 
         wgpu_gl_run
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = std::fs::write(
-            "notarium.log",
-            format!(
-                "Falha ao iniciar Notarium (WGPU): {:?}\n",
-                wgpu_run.as_ref().err()
-            ),
+        let error_message = format!(
+            "Falha ao iniciar Notarium (WGPU): {:?}\n",
+            wgpu_run.as_ref().err()
         );
+        let _ = std::fs::write("notarium.log", &error_message);
+        show_startup_error(&error_message);
         wgpu_run
     }
 }
@@ -78,6 +76,51 @@ fn run_notarium(options: eframe::NativeOptions) -> eframe::Result<()> {
         options,
         Box::new(|_cc| Box::<NotariumApp>::default()),
     )
+}
+
+#[cfg(target_os = "windows")]
+fn show_startup_error(message: &str) {
+    use std::ffi::c_void;
+
+    type Hwnd = *mut c_void;
+    type Lpcwstr = *const u16;
+
+    const MB_ICONERROR: u32 = 0x0000_0010;
+    const MB_OK: u32 = 0x0000_0000;
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn MessageBoxW(hwnd: Hwnd, text: Lpcwstr, caption: Lpcwstr, typ: u32) -> i32;
+    }
+
+    let title = "Notarium - Falha ao iniciar"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<u16>>();
+
+    let full_text = format!(
+        "Não foi possível iniciar o Notarium.\n\nDetalhes:\n{}\nLog salvo em notarium.log",
+        message
+    );
+
+    let text = full_text
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<u16>>();
+
+    unsafe {
+        let _ = MessageBoxW(
+            std::ptr::null_mut(),
+            text.as_ptr(),
+            title.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn show_startup_error(message: &str) {
+    eprintln!("{}", message);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
