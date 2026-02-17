@@ -115,6 +115,122 @@ impl PitchClass {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeySignature {
+    C,
+    G,
+    D,
+    A,
+    E,
+    F,
+    Bb,
+    Eb,
+    Ab,
+}
+
+impl KeySignature {
+    pub const ALL: [Self; 9] = [
+        Self::C,
+        Self::G,
+        Self::D,
+        Self::A,
+        Self::E,
+        Self::F,
+        Self::Bb,
+        Self::Eb,
+        Self::Ab,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::C => "Dó maior / Lá menor",
+            Self::G => "Sol maior / Mi menor",
+            Self::D => "Ré maior / Si menor",
+            Self::A => "Lá maior / Fá# menor",
+            Self::E => "Mi maior / Dó# menor",
+            Self::F => "Fá maior / Ré menor",
+            Self::Bb => "Si♭ maior / Sol menor",
+            Self::Eb => "Mi♭ maior / Dó menor",
+            Self::Ab => "Lá♭ maior / Fá menor",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeSignature {
+    FourFour,
+    ThreeFour,
+    TwoFour,
+    SixEight,
+}
+
+impl TimeSignature {
+    pub const ALL: [Self; 4] = [
+        Self::FourFour,
+        Self::ThreeFour,
+        Self::TwoFour,
+        Self::SixEight,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FourFour => "4/4",
+            Self::ThreeFour => "3/4",
+            Self::TwoFour => "2/4",
+            Self::SixEight => "6/8",
+        }
+    }
+
+    pub fn beats_per_measure(self) -> f32 {
+        match self {
+            Self::FourFour => 4.0,
+            Self::ThreeFour => 3.0,
+            Self::TwoFour => 2.0,
+            Self::SixEight => 3.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaperSize {
+    A4,
+    A3,
+    Letter,
+}
+
+impl PaperSize {
+    pub const ALL: [Self; 3] = [Self::A4, Self::A3, Self::Letter];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::A4 => "A4",
+            Self::A3 => "A3",
+            Self::Letter => "Letter",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScoreSettings {
+    pub title: String,
+    pub composer: String,
+    pub key_signature: KeySignature,
+    pub time_signature: TimeSignature,
+    pub paper_size: PaperSize,
+}
+
+impl Default for ScoreSettings {
+    fn default() -> Self {
+        Self {
+            title: "Nova Partitura".to_owned(),
+            composer: "Compositor".to_owned(),
+            key_signature: KeySignature::C,
+            time_signature: TimeSignature::FourFour,
+            paper_size: PaperSize::A4,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pitch {
     pub class: PitchClass,
     pub octave: i8,
@@ -147,6 +263,10 @@ pub struct Score {
 impl Score {
     pub fn total_beats(&self) -> f32 {
         self.notes.iter().map(|n| n.duration.beats()).sum()
+    }
+
+    pub fn total_measures(&self, time_signature: TimeSignature) -> f32 {
+        self.total_beats() / time_signature.beats_per_measure()
     }
 }
 
@@ -189,5 +309,10 @@ mod tests {
         };
 
         assert_relative_eq!(score.total_beats(), 3.0, epsilon = f32::EPSILON);
+        assert_relative_eq!(
+            score.total_measures(TimeSignature::ThreeFour),
+            1.0,
+            epsilon = f32::EPSILON
+        );
     }
 }

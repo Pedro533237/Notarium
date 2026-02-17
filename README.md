@@ -4,7 +4,9 @@ Notarium é um editor de partituras em Rust com foco em Linux e Windows.
 
 ## O que já está implementado
 
-- Interface desktop com `egui` inspirada em fluxos de notação musical profissional.
+- Tela de **Início** para criar nova partitura.
+- Configuração inicial de partitura: nome, compositor, tonalidade, fórmula de compasso e tamanho de papel.
+- Interface desktop com `egui` para edição.
 - Inserção de notas (altura, oitava, duração e instrumento).
 - Renderização básica de pauta e cabeças de nota.
 - Playback com síntese digital em tempo real e presets de instrumentos orquestrais.
