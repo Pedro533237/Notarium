@@ -31,29 +31,6 @@ fn main() -> eframe::Result<()> {
             "notarium.log",
             format!("Falha ao iniciar Notarium (WGPU): {err:?}\n"),
         );
-
-        // Fallback para Glow/OpenGL caso WGPU falhe.
-        let fallback_options = eframe::NativeOptions {
-            renderer: eframe::Renderer::Glow,
-            ..Default::default()
-        };
-
-        let fallback = eframe::run_native(
-            "Notarium",
-            fallback_options,
-            Box::new(|_cc| Box::<NotariumApp>::default()),
-        );
-
-        if let Err(fallback_err) = &fallback {
-            let _ = std::fs::write(
-                "notarium.log",
-                format!(
-                    "Falha ao iniciar Notarium (WGPU): {err:?}\nFalha no fallback Glow: {fallback_err:?}\n"
-                ),
-            );
-        }
-
-        return fallback;
     }
 
     run
