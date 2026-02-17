@@ -17,79 +17,68 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
-    install_panic_hook();
-
-    // Preferência por menor consumo; em Windows antigo pode cair no WARP (software).
+    // Preferência por menor consumo; em Windows antigo pode cair em caminho de software.
     std::env::set_var("WGPU_POWER_PREF", "low");
 
-    let wgpu_run = run_notarium(eframe::NativeOptions {
+    let mut startup_errors = Vec::new();
+
+    if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
-    });
-
-    if wgpu_run.is_ok() {
-        return wgpu_run;
+    }) {
+        startup_errors.push(format!("Falha ao iniciar Notarium (WGPU padrão): {err}"));
+    } else {
+        return Ok(());
     }
 
     #[cfg(target_os = "windows")]
     {
-        // Tenta backend DirectX, forçando adaptador de fallback (WARP/software).
         std::env::set_var("WGPU_BACKEND", "dx12,dx11");
         std::env::set_var("WGPU_FORCE_FALLBACK_ADAPTER", "1");
-        let wgpu_warp_run = run_notarium(eframe::NativeOptions {
+
+        if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
             renderer: eframe::Renderer::Wgpu,
             ..Default::default()
-        });
-        if wgpu_warp_run.is_ok() {
-            return wgpu_warp_run;
+        }) {
+            startup_errors.push(format!("Falha WGPU(WARP fallback): {err}"));
+        } else {
+            return Ok(());
         }
 
-        // Tenta OpenGL dentro do WGPU como último recurso sem depender do glow/glutin ES.
+        std::env::remove_var("WGPU_FORCE_FALLBACK_ADAPTER");
         std::env::set_var("WGPU_BACKEND", "gl");
-        let wgpu_gl_run = run_notarium(eframe::NativeOptions {
+
+        if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
             renderer: eframe::Renderer::Wgpu,
             ..Default::default()
-        });
-        if wgpu_gl_run.is_ok() {
-            return wgpu_gl_run;
+        }) {
+            startup_errors.push(format!("Falha WGPU(OpenGL): {err}"));
+        } else {
+            return Ok(());
         }
-
-        let error_message = format!(
-            "Falha ao iniciar Notarium (WGPU padrão): {:?}\nFalha WGPU(WARP fallback): {:?}\nFalha WGPU(OpenGL): {:?}\n",
-            wgpu_run.as_ref().err(),
-            wgpu_warp_run.as_ref().err(),
-            wgpu_gl_run.as_ref().err()
-        );
-        let _ = std::fs::write("notarium.log", &error_message);
-        show_startup_error(&error_message);
-
-        wgpu_gl_run
     }
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        let error_message = format!(
-            "Falha ao iniciar Notarium (WGPU): {:?}\n",
-            wgpu_run.as_ref().err()
-        );
-        let _ = std::fs::write("notarium.log", &error_message);
-        show_startup_error(&error_message);
-        wgpu_run
-    }
+    let error_message = startup_errors.join("\n") + "\n";
+    let _ = std::fs::write("notarium.log", &error_message);
+    show_startup_error(&error_message);
+    Ok(())
 }
 
-fn install_panic_hook() {
-    std::panic::set_hook(Box::new(|panic_info| {
-        let message = format!(
-            "Pânico fatal ao iniciar/rodar o Notarium:
-{}
-
-Veja notarium.log para detalhes.",
-            panic_info
-        );
-        let _ = std::fs::write("notarium.log", &message);
-        show_startup_error(&message);
-    }));
+fn run_notarium_guarded(options: eframe::NativeOptions) -> Result<(), String> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_notarium(options))) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(err)) => Err(format!("{err:?}")),
+        Err(panic_payload) => {
+            let message = if let Some(msg) = panic_payload.downcast_ref::<&str>() {
+                (*msg).to_string()
+            } else if let Some(msg) = panic_payload.downcast_ref::<String>() {
+                msg.clone()
+            } else {
+                "panic sem mensagem detalhada".to_owned()
+            };
+            Err(format!("panic capturado: {message}"))
+        }
+    }
 }
 
 fn run_notarium(options: eframe::NativeOptions) -> eframe::Result<()> {
