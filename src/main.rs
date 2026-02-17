@@ -10,7 +10,7 @@ mod audio;
 mod music;
 mod notation;
 
-use egui::{self, ViewportBuilder};
+use egui::{self, ViewportId};
 use egui_glium::EguiGlium;
 use glium::backend::glutin::SimpleWindowBuilder;
 use glium::winit;
@@ -38,19 +38,14 @@ fn run_notarium() -> Result<(), String> {
         .with_title("Notarium")
         .with_inner_size(winit::dpi::PhysicalSize::new(1280, 800));
 
-    let viewport = ViewportBuilder::default().with_inner_size([1280.0, 800.0]);
-
     let (window, display) = SimpleWindowBuilder::new()
         .set_window_builder(window_attributes)
-        .with_config_template_builder(
-            glium::glutin::config::ConfigTemplateBuilder::new()
-                .with_hardware_acceleration(Some(true)),
-        )
         .build(&event_loop);
 
-    let mut egui = EguiGlium::new(viewport, &display, &window, &event_loop);
+    let mut egui = EguiGlium::new(ViewportId::ROOT, &display, &window, &event_loop);
     let mut app = NotariumApp::default();
 
+    #[allow(deprecated)]
     event_loop
         .run(move |event, window_target| match event {
             winit::event::Event::WindowEvent { event, .. } => {

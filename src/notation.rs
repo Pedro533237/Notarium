@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
+use egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 
 use crate::music::{DurationValue, NoteEvent, PitchClass, Score};
 
