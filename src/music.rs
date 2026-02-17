@@ -244,10 +244,6 @@ impl Pitch {
         let semitones_from_a4 = midi - 69;
         440.0 * 2.0_f32.powf(semitones_from_a4 as f32 / 12.0)
     }
-
-    pub fn label(self) -> String {
-        format!("{}{}", self.class.label(), self.octave)
-    }
 }
 
 #[derive(Debug, Clone)]

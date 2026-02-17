@@ -58,14 +58,17 @@ fn main() -> eframe::Result<()> {
         return glow_run;
     }
 
-    let _ = std::fs::write(
-        "notarium.log",
-        format!(
-            "Falha ao iniciar Notarium (WGPU): {:?}\n",
-            wgpu_run.as_ref().err()
-        ),
-    );
-    wgpu_run
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::fs::write(
+            "notarium.log",
+            format!(
+                "Falha ao iniciar Notarium (WGPU): {:?}\n",
+                wgpu_run.as_ref().err()
+            ),
+        );
+        wgpu_run
+    }
 }
 
 fn run_notarium(options: eframe::NativeOptions) -> eframe::Result<()> {
