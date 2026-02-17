@@ -11,29 +11,67 @@ use music::{
 };
 
 fn main() -> eframe::Result<()> {
-    // Ajuda em PCs antigos sem aceleração de GPU: deixa o wgpu escolher backend compatível.
-    // Em várias máquinas Windows antigas, isso cai em caminho de software (WARP).
+    // Preferência por menor consumo; em Windows antigo pode cair no WARP (software).
     std::env::set_var("WGPU_POWER_PREF", "low");
 
-    let options = eframe::NativeOptions {
+    let wgpu_options = eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
 
-    let run = eframe::run_native(
+    let wgpu_run = run_notarium(wgpu_options);
+    if wgpu_run.is_ok() {
+        return wgpu_run;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Tenta backend OpenGL no WGPU para GPUs antigas.
+        std::env::set_var("WGPU_BACKEND", "gl");
+        let wgpu_gl_run = run_notarium(eframe::NativeOptions {
+            renderer: eframe::Renderer::Wgpu,
+            ..Default::default()
+        });
+        if wgpu_gl_run.is_ok() {
+            return wgpu_gl_run;
+        }
+
+        // Fallback final: renderer Glow com aceleração desativada (software quando disponível).
+        let glow_run = run_notarium(eframe::NativeOptions {
+            renderer: eframe::Renderer::Glow,
+            hardware_acceleration: eframe::HardwareAcceleration::Off,
+            ..Default::default()
+        });
+        if glow_run.is_ok() {
+            return glow_run;
+        }
+
+        let _ = std::fs::write(
+            "notarium.log",
+            format!(
+                "Falha ao iniciar Notarium (WGPU): {:?}\nFalha WGPU(OpenGL): {:?}\nFalha Glow(software): {:?}\n",
+                wgpu_run.err(),
+                wgpu_gl_run.err(),
+                glow_run.err()
+            ),
+        );
+
+        return glow_run;
+    }
+
+    let _ = std::fs::write(
+        "notarium.log",
+        format!("Falha ao iniciar Notarium (WGPU): {:?}\n", wgpu_run.err()),
+    );
+    wgpu_run
+}
+
+fn run_notarium(options: eframe::NativeOptions) -> eframe::Result<()> {
+    eframe::run_native(
         "Notarium",
         options,
         Box::new(|_cc| Box::<NotariumApp>::default()),
-    );
-
-    if let Err(err) = &run {
-        let _ = std::fs::write(
-            "notarium.log",
-            format!("Falha ao iniciar Notarium (WGPU): {err:?}\n"),
-        );
-    }
-
-    run
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,31 +257,18 @@ impl NotariumApp {
                 egui::ComboBox::from_label("Duração")
                     .selected_text(self.selected_duration.label())
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut self.selected_duration,
-                            DurationValue::Whole,
-                            DurationValue::Whole.label(),
-                        );
-                        ui.selectable_value(
-                            &mut self.selected_duration,
-                            DurationValue::Half,
-                            DurationValue::Half.label(),
-                        );
-                        ui.selectable_value(
-                            &mut self.selected_duration,
-                            DurationValue::Quarter,
-                            DurationValue::Quarter.label(),
-                        );
-                        ui.selectable_value(
-                            &mut self.selected_duration,
-                            DurationValue::Eighth,
-                            DurationValue::Eighth.label(),
-                        );
+                        for duration in DurationValue::ALL {
+                            ui.selectable_value(
+                                &mut self.selected_duration,
+                                duration,
+                                duration.label(),
+                            );
+                        }
                     });
 
                 ui.add(egui::Slider::new(&mut self.bpm, 40.0..=220.0).text("BPM"));
 
-                if ui.button("Adicionar nota").clicked() {
+                if ui.button("Adicionar Nota").clicked() {
                     self.score.notes.push(NoteEvent {
                         pitch: Pitch {
                             class: self.selected_pitch,
@@ -254,31 +279,22 @@ impl NotariumApp {
                     });
                 }
 
-                if ui.button("Playback").clicked() {
-                    audio::play_score(self.score.clone(), self.bpm);
-                }
-
-                if ui.button("Limpar partitura").clicked() {
+                if ui.button("Limpar Partitura").clicked() {
                     self.score.notes.clear();
                 }
+
+                if ui.button("Play (síntese)").clicked() {
+                    audio::play_score(&self.score, self.bpm);
+                }
+
+                ui.separator();
+                ui.label(format!("Notas inseridas: {}", self.score.notes.len()));
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Visualização da Partitura");
-            ui.label("Editor aberto após configurar nova partitura na tela inicial.");
-            notation::draw_score(ui, &self.score);
             ui.separator();
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for (index, note) in self.score.notes.iter().enumerate() {
-                    ui.label(format!(
-                        "{}: {} • {} • {}",
-                        index + 1,
-                        note.pitch.label(),
-                        note.duration.label(),
-                        note.instrument.label()
-                    ));
-                }
-            });
+            notation::draw_score(ui, &self.score, self.settings.time_signature);
         });
     }
 }
