@@ -33,26 +33,40 @@ fn main() -> eframe::Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        std::env::set_var("WGPU_BACKEND", "dx12,dx11");
+        // Tenta caminho mais estável para máquinas antigas no Windows (DX11 + fallback adapter).
+        std::env::set_var("WGPU_BACKEND", "dx11");
         std::env::set_var("WGPU_FORCE_FALLBACK_ADAPTER", "1");
 
         if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
             renderer: eframe::Renderer::Wgpu,
             ..Default::default()
         }) {
-            startup_errors.push(format!("Falha WGPU(WARP fallback): {err}"));
+            startup_errors.push(format!("Falha WGPU(DX11/WARP fallback): {err}"));
         } else {
             return Ok(());
         }
 
         std::env::remove_var("WGPU_FORCE_FALLBACK_ADAPTER");
-        std::env::set_var("WGPU_BACKEND", "gl");
+        std::env::remove_var("WGPU_BACKEND");
 
+        // Fallback para Glow com aceleração preferida (evita exigir contexto ES específico).
         if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
-            renderer: eframe::Renderer::Wgpu,
+            renderer: eframe::Renderer::Glow,
+            hardware_acceleration: eframe::HardwareAcceleration::Preferred,
             ..Default::default()
         }) {
-            startup_errors.push(format!("Falha WGPU(OpenGL): {err}"));
+            startup_errors.push(format!("Falha Glow(Preferred): {err}"));
+        } else {
+            return Ok(());
+        }
+
+        // Último fallback: Glow com aceleração requerida.
+        if let Err(err) = run_notarium_guarded(eframe::NativeOptions {
+            renderer: eframe::Renderer::Glow,
+            hardware_acceleration: eframe::HardwareAcceleration::Required,
+            ..Default::default()
+        }) {
+            startup_errors.push(format!("Falha Glow(Required): {err}"));
         } else {
             return Ok(());
         }
