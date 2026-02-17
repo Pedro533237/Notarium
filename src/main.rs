@@ -141,7 +141,7 @@ impl NotariumApp {
     fn render_editor(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.heading(format!("{}", self.settings.title));
+                ui.heading(self.settings.title.as_str());
                 ui.separator();
                 ui.label(format!("Compositor: {}", self.settings.composer));
                 ui.separator();
