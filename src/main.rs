@@ -150,6 +150,13 @@ enum AppScreen {
     Editor,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UiTab {
+    Home,
+    Playback,
+    View,
+}
+
 struct NotariumApp {
     score: Score,
     settings: ScoreSettings,
@@ -164,6 +171,9 @@ struct NotariumApp {
     selected_instrument: Instrument,
     bpm: f32,
     screen: AppScreen,
+    active_tab: UiTab,
+    playback: audio::PlaybackController,
+    is_paused: bool,
 }
 
 impl Default for NotariumApp {
@@ -184,6 +194,9 @@ impl Default for NotariumApp {
             selected_instrument: Instrument::Violin,
             bpm: 110.0,
             screen: AppScreen::Start,
+            active_tab: UiTab::Home,
+            playback: audio::create_playback_controller(),
+            is_paused: false,
         }
     }
 }
@@ -265,7 +278,7 @@ impl NotariumApp {
 
     fn render_editor(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.heading(self.settings.title.as_str());
                 ui.separator();
                 ui.label(format!("Compositor: {}", self.settings.composer));
@@ -281,16 +294,56 @@ impl NotariumApp {
                 ));
                 ui.separator();
                 ui.label(format!("Papel: {}", self.settings.paper_size.label()));
+            });
+
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.active_tab, UiTab::Home, "Início");
+                ui.selectable_value(&mut self.active_tab, UiTab::Playback, "Playback");
+                ui.selectable_value(&mut self.active_tab, UiTab::View, "Visualização");
+                ui.separator();
+                if ui.button("← Voltar para Início").clicked() {
+                    self.screen = AppScreen::Start;
+                }
+            });
+
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("⏮ Retroceder").clicked() {
+                    self.playback.rewind();
+                    self.is_paused = false;
+                }
+
+                if ui.button("▶ Play").clicked() {
+                    self.playback.play(self.score.clone(), self.bpm);
+                    self.is_paused = false;
+                }
+
+                let pause_label = if self.is_paused {
+                    "⏵ Retomar"
+                } else {
+                    "⏸ Pausar"
+                };
+                if ui.button(pause_label).clicked() {
+                    if self.is_paused {
+                        self.playback.resume();
+                    } else {
+                        self.playback.pause();
+                    }
+                    self.is_paused = !self.is_paused;
+                }
+
+                if ui.button("⏹ Parar").clicked() {
+                    self.playback.stop();
+                    self.is_paused = false;
+                }
+
                 ui.separator();
                 ui.label(format!(
                     "Compassos: {:.1}",
                     self.score.total_measures(self.settings.time_signature)
                 ));
             });
-
-            if ui.button("← Voltar para Início").clicked() {
-                self.screen = AppScreen::Start;
-            }
         });
 
         egui::SidePanel::left("controls")
@@ -352,7 +405,8 @@ impl NotariumApp {
                 }
 
                 if ui.button("Play (síntese)").clicked() {
-                    audio::play_score(self.score.clone(), self.bpm);
+                    self.playback.play(self.score.clone(), self.bpm);
+                    self.is_paused = false;
                 }
 
                 ui.separator();
@@ -362,7 +416,27 @@ impl NotariumApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Visualização da Partitura");
             ui.separator();
-            notation::draw_score(ui, &self.score);
+
+            match self.active_tab {
+                UiTab::Home => {
+                    ui.label("Aba Início: edição principal e inserção de notas.");
+                }
+                UiTab::Playback => {
+                    ui.label(
+                        "Aba Playback: use Play, Pausa, Retroceder e Parar na faixa superior.",
+                    );
+                }
+                UiTab::View => {
+                    ui.label("Aba Visualização: foco na leitura da pauta.");
+                }
+            }
+
+            ui.add_space(8.0);
+            egui::Frame::canvas(ui.style())
+                .fill(egui::Color32::from_rgb(250, 250, 247))
+                .show(ui, |ui| {
+                    notation::draw_score(ui, &self.score);
+                });
         });
     }
 }

@@ -1,4 +1,5 @@
 use std::f32::consts::PI;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
@@ -7,26 +8,107 @@ use crate::music::{Instrument, NoteEvent, Score};
 
 const SAMPLE_RATE: u32 = 44_100;
 
-pub fn play_score(score: Score, bpm: f32) {
-    thread::spawn(move || {
-        let Ok((_stream, handle)) = OutputStream::try_default() else {
-            return;
-        };
+enum PlaybackCommand {
+    Play { score: Score, bpm: f32 },
+    Pause,
+    Resume,
+    Stop,
+    Rewind,
+}
 
-        let Ok(sink) = Sink::try_new(&handle) else {
-            return;
-        };
+#[derive(Clone)]
+pub struct PlaybackController {
+    tx: Sender<PlaybackCommand>,
+}
 
-        for note in score.notes {
-            let beat_duration_s = 60.0 / bpm.max(20.0);
-            let duration_s = note.duration.beats() * beat_duration_s;
-            let samples = synthesize_note(&note, duration_s);
-            let buffer = SamplesBuffer::new(1, SAMPLE_RATE, samples);
-            sink.append(buffer);
+impl PlaybackController {
+    pub fn play(&self, score: Score, bpm: f32) {
+        let _ = self.tx.send(PlaybackCommand::Play { score, bpm });
+    }
+
+    pub fn pause(&self) {
+        let _ = self.tx.send(PlaybackCommand::Pause);
+    }
+
+    pub fn resume(&self) {
+        let _ = self.tx.send(PlaybackCommand::Resume);
+    }
+
+    pub fn stop(&self) {
+        let _ = self.tx.send(PlaybackCommand::Stop);
+    }
+
+    pub fn rewind(&self) {
+        let _ = self.tx.send(PlaybackCommand::Rewind);
+    }
+}
+
+pub fn create_playback_controller() -> PlaybackController {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || playback_thread(rx));
+    PlaybackController { tx }
+}
+
+fn playback_thread(rx: Receiver<PlaybackCommand>) {
+    let Ok((_stream, handle)) = OutputStream::try_default() else {
+        return;
+    };
+
+    let mut sink: Option<Sink> = None;
+    let mut last_score: Option<Score> = None;
+    let mut last_bpm = 110.0;
+
+    while let Ok(cmd) = rx.recv() {
+        match cmd {
+            PlaybackCommand::Play { score, bpm } => {
+                last_score = Some(score);
+                last_bpm = bpm;
+                sink = create_sink_with_score(&handle, last_score.as_ref(), last_bpm);
+            }
+            PlaybackCommand::Pause => {
+                if let Some(current) = &sink {
+                    current.pause();
+                }
+            }
+            PlaybackCommand::Resume => {
+                if let Some(current) = &sink {
+                    current.play();
+                }
+            }
+            PlaybackCommand::Stop => {
+                if let Some(current) = sink.take() {
+                    current.stop();
+                }
+            }
+            PlaybackCommand::Rewind => {
+                if let Some(current) = sink.take() {
+                    current.stop();
+                }
+                sink = create_sink_with_score(&handle, last_score.as_ref(), last_bpm);
+            }
         }
+    }
+}
 
-        sink.sleep_until_end();
-    });
+fn create_sink_with_score(
+    handle: &rodio::OutputStreamHandle,
+    score: Option<&Score>,
+    bpm: f32,
+) -> Option<Sink> {
+    let score = score?;
+    let Ok(sink) = Sink::try_new(handle) else {
+        return None;
+    };
+
+    for note in &score.notes {
+        let beat_duration_s = 60.0 / bpm.max(20.0);
+        let duration_s = note.duration.beats() * beat_duration_s;
+        let samples = synthesize_note(note, duration_s);
+        let buffer = SamplesBuffer::new(1, SAMPLE_RATE, samples);
+        sink.append(buffer);
+    }
+
+    Some(sink)
 }
 
 fn synthesize_note(note: &NoteEvent, duration_s: f32) -> Vec<f32> {
