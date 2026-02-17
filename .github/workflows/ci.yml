@@ -30,8 +30,16 @@ jobs:
       - name: Test
         run: cargo test --all-targets
 
-      - name: Build release
+      - name: Build release (Linux)
+        if: runner.os == 'Linux'
         run: cargo build --release
+
+      - name: Build release (Windows static CRT)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:RUSTFLAGS = "-C target-feature=+crt-static"
+          cargo build --release
 
       - name: Upload Linux artifact
         if: runner.os == 'Linux'
@@ -40,9 +48,25 @@ jobs:
           name: notarium-linux
           path: target/release/notarium
 
-      - name: Upload Windows artifact
+      - name: Package Windows portable zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist/notarium-portable -Force | Out-Null
+          Copy-Item target/release/notarium.exe dist/notarium-portable/notarium.exe
+          @"
+          Notarium Portable (Windows)
+
+          1) Extraia este .zip em qualquer pasta.
+          2) Execute notarium.exe.
+
+          Observação: build gerada com CRT estático para facilitar uso portátil.
+          "@ | Set-Content dist/notarium-portable/README-PORTABLE.txt
+          Compress-Archive -Path dist/notarium-portable/* -DestinationPath dist/notarium-windows-portable.zip -Force
+
+      - name: Upload Windows portable artifact
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: notarium-windows
-          path: target/release/notarium.exe
+          name: notarium-windows-portable
+          path: dist/notarium-windows-portable.zip
