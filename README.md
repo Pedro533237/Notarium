@@ -52,6 +52,16 @@ Redução prática de alertas:
 
 Este repositório é um **MVP técnico**. Ainda não cobre 100% da notação completa de ferramentas como Sibelius/MuseScore (articulações avançadas, layout editorial completo, VST, MusicXML completo, etc.).
 
+
+## Stack recomendado para evolução (teoria musical + UI avançada)
+
+Para evoluir o Notarium para um nível mais próximo de Sibelius/MuseScore (sem minimalismo), o caminho sugerido é:
+
+- **Teoria musical (backend):** `rust-music-theory`, `music_note` e `rust-music` para modelagem rica de notas, acordes, escalas, instrumentos e exportações MIDI.
+- **Composição e áudio em tempo real:** `tunes` + `cpal` para reprodução responsiva e geração de padrões musicais.
+- **Renderização de partitura:** pipeline com `rustsheet`/`staff` e saída SVG para visual mais editorial/profissional.
+- **Experiência visual premium:** manter desktop nativo (egui) com layout denso e painéis ricos; ou migrar para **Tauri + frontend web** quando quiser uma interface ainda mais próxima de launchers modernos como o MuseScore na tela inicial.
+
 ## Como executar
 
 ```bash

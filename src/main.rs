@@ -232,6 +232,7 @@ impl Default for NotariumApp {
 
 impl NotariumApp {
     fn update(&mut self, ctx: &egui::Context) {
+        apply_notarium_visuals(ctx);
         match self.screen {
             AppScreen::Start => self.render_start_screen(ctx),
             AppScreen::Editor => self.render_editor(ctx),
@@ -307,27 +308,62 @@ impl NotariumApp {
 
     fn render_start_screen(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.visuals_mut().panel_fill = egui::Color32::from_rgb(23, 25, 30);
+            ui.visuals_mut().panel_fill = egui::Color32::from_rgb(16, 20, 28);
 
-            ui.vertical(|ui| {
-                ui.add_space(8.0);
-                ui.heading(
-                    egui::RichText::new("Notarium")
-                        .size(34.0)
-                        .color(egui::Color32::WHITE),
-                );
-                ui.label(
-                    egui::RichText::new(
-                        "Hub moderno de partituras: crie, abra e gerencie arquivos .ntr",
-                    )
-                    .color(egui::Color32::from_rgb(190, 196, 210)),
-                );
-                ui.add_space(10.0);
+            ui.group(|ui| {
+                ui.set_min_height(118.0);
+                ui.vertical_centered(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("NOTARIUM")
+                            .size(14.0)
+                            .color(egui::Color32::from_rgb(165, 178, 212)),
+                    );
+                    ui.heading(
+                        egui::RichText::new("Suite de composição orquestral")
+                            .size(32.0)
+                            .color(egui::Color32::WHITE),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "Fluxo visual inspirado em Sibelius + tela inicial no estilo MuseScore",
+                        )
+                        .size(15.0)
+                        .color(egui::Color32::from_rgb(186, 197, 220)),
+                    );
+                    ui.add_space(6.0);
+                });
             });
+
+            ui.add_space(10.0);
+
+            ui.columns(3, |columns| {
+                render_overview_card(
+                    &mut columns[0],
+                    "🎼 Projeto",
+                    "Editor de partituras multi-instrumento com foco em performance desktop.",
+                );
+                render_overview_card(
+                    &mut columns[1],
+                    "🧠 Backend",
+                    "Pronto para acoplar motores de teoria musical e geração MIDI avançada.",
+                );
+                render_overview_card(
+                    &mut columns[2],
+                    "🔊 Reprodução",
+                    "Síntese em tempo real para revisão instantânea durante a escrita.",
+                );
+            });
+
+            ui.add_space(8.0);
 
             ui.columns(2, |columns| {
                 columns[0].group(|ui| {
                     ui.heading("Nova Partitura");
+                    ui.label(
+                        egui::RichText::new("Configuração editorial completa")
+                            .color(egui::Color32::from_rgb(165, 178, 212)),
+                    );
                     ui.separator();
                     ui.label("Nome da partitura");
                     ui.text_edit_singleline(&mut self.start_title);
@@ -375,6 +411,10 @@ impl NotariumApp {
 
                 columns[1].group(|ui| {
                     ui.heading("Partituras .ntr");
+                    ui.label(
+                        egui::RichText::new("Hub inicial inspirado em launchers modernos")
+                            .color(egui::Color32::from_rgb(165, 178, 212)),
+                    );
                     ui.separator();
                     ui.label("Caminho do arquivo (.ntr)");
                     ui.text_edit_singleline(&mut self.file_path_input);
@@ -413,6 +453,17 @@ impl NotariumApp {
 
             ui.add_space(8.0);
             ui.label(egui::RichText::new(&self.start_message).color(egui::Color32::LIGHT_GREEN));
+
+            ui.add_space(10.0);
+            ui.group(|ui| {
+                ui.heading("Roadmap técnico recomendado");
+                ui.separator();
+                ui.label("• Teoria musical: rust-music-theory + music_note para escalas, intervalos e MIDI.");
+                ui.label("• Composição/áudio: tunes + cpal para padrões e reprodução com baixa latência.");
+                ui.label("• Estruturas avançadas: rust-music para arranjos multi-instrumento e exportação.");
+                ui.label("• Renderização de partitura: rustsheet/staff + pipeline SVG para editor visual rico.");
+                ui.label("• GUI alternativa: Tauri + frontend web para experiência ainda mais próxima de MuseScore.");
+            });
         });
     }
 
@@ -644,6 +695,36 @@ impl NotariumApp {
             });
         });
     }
+}
+
+fn apply_notarium_visuals(ctx: &egui::Context) {
+    let mut visuals = egui::Visuals::dark();
+    visuals.override_text_color = Some(egui::Color32::from_rgb(229, 235, 247));
+    visuals.panel_fill = egui::Color32::from_rgb(16, 20, 28);
+    visuals.window_fill = egui::Color32::from_rgb(20, 24, 34);
+    visuals.extreme_bg_color = egui::Color32::from_rgb(12, 15, 24);
+    visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(24, 30, 42);
+    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(32, 39, 54);
+    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(56, 70, 97);
+    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(78, 96, 128);
+    visuals.selection.bg_fill = egui::Color32::from_rgb(82, 121, 212);
+    visuals.hyperlink_color = egui::Color32::from_rgb(124, 172, 255);
+    ctx.set_visuals(visuals);
+}
+
+fn render_overview_card(ui: &mut egui::Ui, title: &str, body: &str) {
+    ui.group(|ui| {
+        ui.set_min_height(86.0);
+        ui.vertical(|ui| {
+            ui.label(egui::RichText::new(title).size(17.0).strong());
+            ui.add_space(2.0);
+            ui.label(
+                egui::RichText::new(body)
+                    .size(13.0)
+                    .color(egui::Color32::from_rgb(175, 187, 212)),
+            );
+        });
+    });
 }
 
 fn find_recent_ntr_files() -> Vec<PathBuf> {
