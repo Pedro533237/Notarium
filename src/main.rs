@@ -1,11 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-use notarium::audio::engine::{AudioBackend, AudioEngine, AudioEngineConfig};
-use notarium::core::project::{KeySignature, NotariumProject, ProjectMetadata, TimeSignature};
 use notarium::instruments::registry::InstrumentRegistry;
-use notarium::theme::notarium_theme::NotariumTheme;
-use notarium::ui::desktop::launch_start_screen;
-use notarium::ui::start_screen::{ProjectTemplate, StartScreenState};
+use notarium::ui::app::NotariumUiApp;
+use notarium::ui::desktop::run_desktop_app;
 
 fn main() {
     if let Err(error) = run() {
@@ -21,30 +18,9 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let theme = NotariumTheme::noturno();
-
-    let mut start_screen = StartScreenState::new(theme);
-    start_screen.metadata = ProjectMetadata {
-        title: "Nova Partitura".to_owned(),
-        subtitle: "Notarium Production Ready".to_owned(),
-        composer: "Compositor".to_owned(),
-        arranger: "Arranjador".to_owned(),
-        copyright: "© 2026".to_owned(),
-        key_signature: KeySignature::C,
-        time_signature: TimeSignature::new(4, 4)?,
-        bpm: 96,
-    };
-    start_screen.template = ProjectTemplate::Orquestra;
-
     let registry = InstrumentRegistry::load_embedded()?;
-    start_screen.select_template_defaults(&registry)?;
-
-    let project = NotariumProject::from_start_screen(&start_screen)?;
-
-    let mut audio = AudioEngine::new(AudioEngineConfig::default(), AudioBackend::CpuOnly);
-    audio.load_project(&project)?;
-
-    launch_start_screen(&project, theme)?;
+    let mut app = NotariumUiApp::new(&registry)?;
+    run_desktop_app(&mut app)?;
     Ok(())
 }
 
@@ -54,9 +30,6 @@ fn show_error_dialog(message: &str) -> Result<(), String> {
 
     type Hwnd = *mut c_void;
     type Lpcwstr = *const u16;
-
-    const MB_OK: u32 = 0x0000_0000;
-    const MB_ICONERROR: u32 = 0x0000_0010;
 
     #[link(name = "user32")]
     extern "system" {
@@ -78,7 +51,7 @@ fn show_error_dialog(message: &str) -> Result<(), String> {
             std::ptr::null_mut(),
             text.as_ptr(),
             title.as_ptr(),
-            MB_OK | MB_ICONERROR,
+            0x0000_0000 | 0x0000_0010,
         )
     };
 
