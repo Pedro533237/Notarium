@@ -1,67 +1,92 @@
 # Notarium
 
-Notarium é um editor de partituras em Rust com foco em Windows x64.
+Notarium é um editor de partituras em Rust com foco em Windows x64, com arquitetura modular para evolução de notação profissional.
 
-## O que já está implementado
+## Novidades estruturais (Staff System + Edição)
 
-- Tela de **Início** para criar nova partitura.
-- Configuração inicial de partitura: nome, compositor, tonalidade, fórmula de compasso e tamanho de papel.
-- Interface desktop com `egui` + `glium` (OpenGL puro) para edição.
-- Inserção de notas (altura, oitava, duração e instrumento).
-- Renderização básica de pauta e cabeças de nota.
-- Playback com síntese digital em tempo real e presets de instrumentos orquestrais.
-- Pipeline de CI em GitHub Actions para validar build, testes e gerar binário portable Windows x64.
+- Núcleo de layout de pauta/notas migrado para C++ (`src/native/notation_engine.cpp`) via FFI (`src/cpp_engine.rs`) para reduzir instabilidades percebidas no caminho Rust puro.
+- Novo núcleo musical modular em `src/music/` (`staff`, `measure`, `clef`, `duration`, `note`).
+- Sistema de pautas com 5 linhas, múltiplas pautas por sistema, clave (Sol/Fá/Dó), armadura de clave e fórmula de compasso.
+- Barras de compasso automáticas por staff.
+- Coordenadas relativas em **staff space units (SSU)** para separação de lógica musical e layout.
+- `NoteDuration` expandido: semibreve, mínima, semínima, colcheia, semicolcheia, fusa e semifusa.
+- `Note` com seleção visual (`selected`, `opacity`) e suporte a `velocity`, pontuação e ligadura.
+- Seleção estilo MuseScore: click com hitbox por nota, highlight azul, opacidade reduzida e modo de edição único (`EditMode::NoteSelected`).
+- Atalhos de edição:
+  - `1..7` altera duração
+  - `↑/↓` altera pitch
+  - `Delete` remove nota selecionada
+- Renderização em camadas (`Staff`, `Notes`, `SelectionOverlay`) com cache de glyphs e batching lógico.
 
-## Requisitos de arquitetura
+## Compatibilidade OpenGL
 
-- O Notarium é suportado apenas em **Windows x64 (64-bit)**.
+O renderer foi preparado para perfis legados:
 
-## Compatibilidade com PCs antigos (sem aceleração GPU)
+- OpenGL 2.1
+- OpenGL 2.0
+- OpenGL ES 2.0
 
-- O app usa backend **OpenGL puro via `glium`** (sem WGPU/Vulkan).
-- Foi ajustado para focar em compatibilidade com PCs antigos que suportam até OpenGL 3.3 / DirectX 10.1.
-- Em falhas de inicialização/execução, o app grava `notarium.log` ao lado do executável e mostra um pop-up de erro no Windows.
+Fallback automático de contexto na inicialização (ordem): **OpenGL 2.0 → OpenGL 2.1 → OpenGL ES 2.0 → padrão do driver**.
 
-## Windows portable via GitHub Actions
 
-O workflow gera o artefato **`notarium-windows-portable`** com um arquivo `notarium-windows-portable.zip` (binário x64).
+## Recursos de edição adicionados
 
-Passos:
-1. Abra a aba **Actions** no GitHub.
-2. Entre em uma execução de workflow com status verde.
-3. Baixe o artefato `notarium-windows-portable`.
-4. Extraia o `.zip`.
-5. Rode `notarium.exe` (sem instalador, estilo portable).
+- Inserção de nota por clique direto na pauta (converte posição vertical em pitch).
+- Inserção por teclado (`A S D F G H J` para notas; `Q/W/E/R` para acidentes).
+- Acidentes visuais e lógicos: sustenido, bemol e bequadro.
+- Barra superior reorganizada com ações principais (reproduzir/parar/gravar/inserção/acidentes/dinâmicas/layout/adicionar pauta).
+- Botões para adicionar/remover pauta em tempo real com instrumento por pauta (mixer básico).
+- Painel de identificação da nota selecionada no status (nome, frequência e duração).
+- Espaçamento horizontal proporcional à duração das notas e beam simples para colcheias e menores consecutivas.
 
-## Sobre alerta do Windows Defender / SmartScreen
+## Estrutura de código
 
-Não é possível eliminar 100% dos alertas sem **assinatura digital de código** (certificado EV/OV).
-
-Redução prática de alertas:
-- assinar o executável em release com certificado de código;
-- manter distribuição consistente (mesmo nome/hash por release oficial);
-- publicar releases estáveis e usar reputação de download.
-
-## Melhorias de velocidade de compilação
-
-- CI com cache (`Swatinem/rust-cache`) para reduzir tempo em builds repetidos.
-- Registro crates.io em modo `sparse` no workflow.
-- Dependências com features reduzidas para evitar compilar backends/decoders desnecessários.
-
-## Limites atuais
-
-Este repositório é um **MVP técnico**. Ainda não cobre 100% da notação completa de ferramentas como Sibelius/MuseScore (articulações avançadas, layout editorial completo, VST, MusicXML completo, etc.).
-
-## Como executar
-
-```bash
-cargo run
+```text
+src/
+ ├── music/
+ │   ├── duration.rs
+ │   ├── measure.rs
+ │   ├── note.rs
+ │   ├── staff.rs
+ │   └── mod.rs
+ ├── render/
+ │   ├── renderer.rs
+ │   ├── glyph_cache.rs
+ │   ├── staff_renderer.rs
+ │   ├── note_renderer.rs
+ │   └── mod.rs
+ ├── input/
+ │   ├── mouse.rs
+ │   ├── keyboard.rs
+ │   └── mod.rs
+ ├── editor/
+ │   ├── selection.rs
+ │   ├── edit_mode.rs
+ │   └── mod.rs
+ ├── audio.rs
+ └── main.rs
 ```
 
-## Como testar
+## Como executar (Windows x64)
 
 ```bash
-cargo test
+cargo run --release
+```
+
+## Build para Windows
+
+Use o script:
+
+```bat
+scripts\build_windows.bat
+```
+
+Ele compila em release para `x86_64-pc-windows-msvc`.
+
+## Checks recomendados
+
+```bash
+cargo fmt
 cargo clippy --all-targets -- -D warnings
-cargo fmt --check
+cargo check --target x86_64-pc-windows-msvc
 ```

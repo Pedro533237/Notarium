@@ -22,6 +22,10 @@ pub struct PlaybackController {
 }
 
 impl PlaybackController {
+    pub fn new() -> Self {
+        create_playback_controller()
+    }
+
     pub fn play(&self, score: Score, bpm: f32) {
         let _ = self.tx.send(PlaybackCommand::Play { score, bpm });
     }
@@ -102,7 +106,7 @@ fn create_sink_with_score(
 
     for note in &score.notes {
         let beat_duration_s = 60.0 / bpm.max(20.0);
-        let duration_s = note.duration.beats() * beat_duration_s;
+        let duration_s = note.effective_beats() * beat_duration_s;
         let samples = synthesize_note(note, duration_s);
         let buffer = SamplesBuffer::new(1, SAMPLE_RATE, samples);
         sink.append(buffer);
