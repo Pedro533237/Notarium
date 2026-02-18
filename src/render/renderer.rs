@@ -7,17 +7,19 @@ use super::{glyph_cache::GlyphCache, note_renderer, staff_renderer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlProfile {
-    OpenGl21,
     OpenGl20,
+    OpenGl21,
     OpenGlEs20,
+    Default,
 }
 
 impl GlProfile {
     pub fn label(self) -> &'static str {
         match self {
-            Self::OpenGl21 => "OpenGL 2.1",
             Self::OpenGl20 => "OpenGL 2.0",
+            Self::OpenGl21 => "OpenGL 2.1",
             Self::OpenGlEs20 => "OpenGL ES 2.0",
+            Self::Default => "OpenGL padrão do driver",
         }
     }
 }
@@ -35,13 +37,13 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new() -> Self {
+    pub fn new(gl_profile: GlProfile) -> Self {
         let mut glyph_cache = GlyphCache::default();
         glyph_cache.warmup_music_symbols();
 
         Self {
             glyph_cache,
-            gl_profile: GlProfile::OpenGl21,
+            gl_profile,
         }
     }
 

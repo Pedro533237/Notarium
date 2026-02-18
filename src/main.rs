@@ -15,16 +15,25 @@ mod render;
 use editor::{EditMode, SelectionState};
 use egui::{self, ViewportId};
 use egui_glium::EguiGlium;
-use glium::backend::glutin::SimpleWindowBuilder;
+use glium::glutin;
 use glium::winit;
+use glium::Display;
 use glium::Surface;
+use glutin::config::ConfigTemplateBuilder;
+use glutin::context::{ContextApi, ContextAttributesBuilder, Version};
+use glutin::display::GetGlDisplay;
+use glutin::prelude::*;
+use glutin::surface::{SurfaceAttributesBuilder, WindowSurface};
+use glutin_winit::DisplayBuilder;
 use input::keyboard::{apply_pitch_step, collect_actions, KeyboardAction};
 use input::mouse::primary_click_position;
 use music::{
     Clef, DurationValue, Instrument, KeySignature, Note, NoteEvent, NoteId, PaperSize, Pitch,
     PitchClass, Score, ScoreSettings, StaffSystem, TimeSignature,
 };
+use raw_window_handle::HasWindowHandle;
 use render::{GlProfile, Renderer};
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 fn main() {
@@ -36,6 +45,99 @@ fn main() {
     }
 }
 
+fn build_display_with_fallback(
+    event_loop: &winit::event_loop::EventLoop<()>,
+    window_attributes: winit::window::WindowAttributes,
+) -> Result<(winit::window::Window, Display<WindowSurface>, GlProfile), String> {
+    let attempts = [
+        (
+            ContextApi::OpenGl(Some(Version::new(2, 0))),
+            GlProfile::OpenGl20,
+        ),
+        (
+            ContextApi::OpenGl(Some(Version::new(2, 1))),
+            GlProfile::OpenGl21,
+        ),
+        (
+            ContextApi::Gles(Some(Version::new(2, 0))),
+            GlProfile::OpenGlEs20,
+        ),
+        (ContextApi::OpenGl(None), GlProfile::Default),
+    ];
+
+    let mut errors = Vec::new();
+
+    for (api, profile) in attempts {
+        match try_build_display(event_loop, window_attributes.clone(), api) {
+            Ok((window, display)) => return Ok((window, display, profile)),
+            Err(err) => errors.push(format!("{} => {}", profile.label(), err)),
+        }
+    }
+
+    Err(errors.join(" | "))
+}
+
+fn try_build_display(
+    event_loop: &winit::event_loop::EventLoop<()>,
+    window_attributes: winit::window::WindowAttributes,
+    api: ContextApi,
+) -> Result<(winit::window::Window, Display<WindowSurface>), String> {
+    let display_builder = DisplayBuilder::new().with_window_attributes(Some(window_attributes));
+    let config_template_builder = ConfigTemplateBuilder::new();
+
+    let (window, gl_config) = display_builder
+        .build(event_loop, config_template_builder, |mut configs| {
+            configs
+                .next()
+                .expect("Nenhuma configuração OpenGL disponível")
+        })
+        .map_err(|e| format!("falha no DisplayBuilder: {e}"))?;
+
+    let window = window.ok_or("janela não criada".to_owned())?;
+    let (width, height): (u32, u32) = window.inner_size().into();
+
+    let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+        window
+            .window_handle()
+            .map_err(|e| format!("window_handle: {e}"))?
+            .into(),
+        NonZeroU32::new(width.max(1)).ok_or("largura inválida")?,
+        NonZeroU32::new(height.max(1)).ok_or("altura inválida")?,
+    );
+
+    let surface = unsafe {
+        gl_config
+            .display()
+            .create_window_surface(&gl_config, &attrs)
+            .map_err(|e| format!("create_window_surface: {e}"))?
+    };
+
+    let context_attributes = ContextAttributesBuilder::new()
+        .with_context_api(api)
+        .build(Some(
+            window
+                .window_handle()
+                .map_err(|e| format!("window_handle contexto: {e}"))?
+                .into(),
+        ));
+
+    let not_current = unsafe {
+        gl_config
+            .display()
+            .create_context(&gl_config, &context_attributes)
+            .map_err(|e| format!("create_context: {e}"))?
+    };
+
+    let current = not_current
+        .make_current(&surface)
+        .map_err(|e| format!("make_current: {e}"))?;
+
+    let display = Display::from_context_surface(current, surface)
+        .map_err(|e| format!("Display::from_context_surface: {e}"))?;
+
+    Ok((window, display))
+}
+
 fn run_notarium() -> Result<(), String> {
     let event_loop = winit::event_loop::EventLoop::builder()
         .build()
@@ -45,12 +147,11 @@ fn run_notarium() -> Result<(), String> {
         .with_title("Notarium")
         .with_inner_size(winit::dpi::PhysicalSize::new(1280, 800));
 
-    let (window, display) = SimpleWindowBuilder::new()
-        .set_window_builder(window_attributes)
-        .build(&event_loop);
+    let (window, display, gl_profile) = build_display_with_fallback(&event_loop, window_attributes)
+        .map_err(|err| format!("Falha ao criar contexto OpenGL: {err}"))?;
 
     let mut egui = EguiGlium::new(ViewportId::ROOT, &display, &window, &event_loop);
-    let mut app = NotariumApp::default();
+    let mut app = NotariumApp::default_with_gl(gl_profile);
 
     #[allow(deprecated)]
     event_loop
@@ -190,6 +291,12 @@ struct NotariumApp {
 
 impl Default for NotariumApp {
     fn default() -> Self {
+        Self::default_with_gl(GlProfile::Default)
+    }
+}
+
+impl NotariumApp {
+    fn default_with_gl(gl_profile: GlProfile) -> Self {
         let settings = ScoreSettings::default();
         Self {
             score: Score::default(),
@@ -222,7 +329,7 @@ impl Default for NotariumApp {
             file_path_input: "notarium_score.ntr".to_owned(),
             start_message: "Pronto para criar ou abrir partitura.".to_owned(),
             recent_scores: find_recent_ntr_files(),
-            renderer: Renderer::new(),
+            renderer: Renderer::new(gl_profile),
             staff_system: StaffSystem::with_standard_pair(
                 settings.key_signature,
                 settings.time_signature,
@@ -235,10 +342,9 @@ impl Default for NotariumApp {
             settings,
         }
     }
-}
 
-impl NotariumApp {
     fn update(&mut self, ctx: &egui::Context) {
+        ctx.set_visuals(egui::Visuals::dark());
         match self.screen {
             AppScreen::Start => self.render_start_screen(ctx),
             AppScreen::Editor => self.render_editor(ctx),
@@ -518,13 +624,7 @@ impl NotariumApp {
                 ui.heading("Entrada de Notas");
                 ui.separator();
 
-                egui::ComboBox::from_label("Perfil GL")
-                    .selected_text(self.renderer.gl_profile.label())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.renderer.gl_profile, GlProfile::OpenGl21, GlProfile::OpenGl21.label());
-                        ui.selectable_value(&mut self.renderer.gl_profile, GlProfile::OpenGl20, GlProfile::OpenGl20.label());
-                        ui.selectable_value(&mut self.renderer.gl_profile, GlProfile::OpenGlEs20, GlProfile::OpenGlEs20.label());
-                    });
+                ui.label(format!("Perfil GL ativo (fallback): {}", self.renderer.gl_profile.label()));
 
                 egui::ComboBox::from_label("Instrumento")
                     .selected_text(self.selected_instrument.label())

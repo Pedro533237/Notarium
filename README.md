@@ -25,7 +25,7 @@ O renderer foi preparado para perfis legados:
 - OpenGL 2.0
 - OpenGL ES 2.0
 
-No editor, é possível alternar o perfil-alvo para validar cenários de hardware antigo.
+Fallback automático de contexto na inicialização (ordem): **OpenGL 2.0 → OpenGL 2.1 → OpenGL ES 2.0 → padrão do driver**.
 
 ## Estrutura de código
 
