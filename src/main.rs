@@ -22,6 +22,16 @@ use music::{
     ScoreSettings, TimeSignature,
 };
 
+fn panic_payload_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_owned()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "panic sem mensagem detalhada".to_owned()
+    }
+}
+
 fn main() {
     install_panic_hook();
 
@@ -40,9 +50,25 @@ fn run_notarium() -> Result<(), String> {
         .with_title("Notarium")
         .with_inner_size(winit::dpi::PhysicalSize::new(1280, 800));
 
-    let (window, display) = SimpleWindowBuilder::new()
-        .set_window_builder(window_attributes)
-        .build(&event_loop);
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let build_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        SimpleWindowBuilder::new()
+            .set_window_builder(window_attributes)
+            .build(&event_loop)
+    }));
+    std::panic::set_hook(previous_hook);
+
+    let (window, display) = match build_result {
+        Ok(tuple) => tuple,
+        Err(payload) => {
+            let panic_message = panic_payload_message(payload);
+            return Err(format!(
+                "Falha ao criar janela/contexto OpenGL. Detalhes: {panic_message}. \
+Verifique se os drivers de vídeo estão atualizados e se o OpenGL 3.3 está disponível."
+            ));
+        }
+    };
 
     let mut egui = EguiGlium::new(ViewportId::ROOT, &display, &window, &event_loop);
     let mut app = NotariumApp::default();
