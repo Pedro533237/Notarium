@@ -7,6 +7,7 @@ compile_error!("Notarium atualmente é suportado apenas no Windows.");
 compile_error!("Notarium suporta apenas arquiteturas x64 (64-bit).");
 
 mod audio;
+mod cpp_engine;
 mod editor;
 mod input;
 mod music;
@@ -259,6 +260,7 @@ enum AppScreen {
 }
 
 struct NotariumApp {
+    cpp_engine: cpp_engine::CppNotationEngine,
     score: Score,
     settings: ScoreSettings,
     start_title: String,
@@ -301,6 +303,7 @@ impl NotariumApp {
     fn default_with_gl(gl_profile: GlProfile) -> Self {
         let settings = ScoreSettings::default();
         Self {
+            cpp_engine: cpp_engine::CppNotationEngine::new(),
             score: Score::default(),
             start_title: settings.title.clone(),
             start_composer: settings.composer.clone(),
@@ -359,6 +362,7 @@ impl NotariumApp {
         );
         self.score.notes.clear();
         self.visual_notes.clear();
+        self.cpp_engine.clear();
         self.selection = SelectionState::default();
         self.note_info = "Nenhuma nota selecionada".to_owned();
         self.edit_mode = EditMode::None;
@@ -386,6 +390,7 @@ impl NotariumApp {
         let note = Note::new(self.next_note_id, evt.pitch, evt.duration, staff_pos);
         self.next_note_id += 1;
         self.visual_notes.push(note);
+        self.cpp_engine.add_note(evt.pitch, evt.duration.beats());
         self.staff_system
             .ensure_layout_for_beats(self.score.total_beats());
     }
@@ -397,6 +402,7 @@ impl NotariumApp {
         let note = Note::new(self.next_note_id, evt.pitch, evt.duration, staff_pos);
         self.next_note_id += 1;
         self.visual_notes.push(note);
+        self.cpp_engine.add_note(evt.pitch, evt.duration.beats());
         self.staff_system
             .ensure_layout_for_beats(self.score.total_beats());
     }
@@ -427,6 +433,13 @@ impl NotariumApp {
                 self.add_note_from_pitch(pitch);
                 break;
             }
+        }
+    }
+
+    fn rebuild_cpp_engine(&mut self) {
+        self.cpp_engine.clear();
+        for evt in &self.score.notes {
+            self.cpp_engine.add_note(evt.pitch, evt.duration.beats());
         }
     }
 
@@ -509,6 +522,7 @@ impl NotariumApp {
             if index < self.score.notes.len() {
                 self.score.notes.remove(index);
             }
+            self.rebuild_cpp_engine();
             self.selection.set_selected(None, &mut self.visual_notes);
             self.selection.focus = false;
             self.edit_mode = EditMode::None;
@@ -795,6 +809,7 @@ impl NotariumApp {
                 if ui.button("Limpar Partitura").clicked() {
                     self.score.notes.clear();
                     self.visual_notes.clear();
+                    self.cpp_engine.clear();
                     self.selection = SelectionState::default();
                     self.selection.focus = false;
                     self.edit_mode = EditMode::None;
@@ -834,6 +849,8 @@ impl NotariumApp {
             ui.separator();
 
             egui::ScrollArea::both().show(ui, |ui| {
+                self.cpp_engine
+                    .set_staff_geometry(ui.available_width().max(400.0), 40.0);
                 let (response, overlays) = self.renderer.draw_orchestral_page(
                     ui,
                     &self.score,
@@ -851,6 +868,7 @@ impl NotariumApp {
                         self.selection.set_selected(hit, &mut self.visual_notes);
                     } else {
                         self.add_note_from_staff_click(cursor, response.rect);
+                        self.rebuild_cpp_engine();
                         self.selection.set_selected(None, &mut self.visual_notes);
                     }
                     self.selection.focus = hit.is_some();
@@ -867,6 +885,12 @@ impl NotariumApp {
                 ui.label(format!("Seleção: {:?} • foco:{}", self.selection.selected_note, self.selection.focus));
                 ui.separator();
                 ui.label(format!("Nota: {}", self.note_info));
+                ui.separator();
+                ui.label(format!("Engine C++ notas: {}", self.cpp_engine.note_count()));
+                if let Some(first) = self.cpp_engine.note_at(0) {
+                    ui.separator();
+                    ui.label(format!("C++ first x/y: {:.1}/{:.1}", first.x, first.y));
+                }
                 ui.separator();
                 ui.label(format!("Zoom: {:.1}%", self.zoom_percent));
                 ui.separator();

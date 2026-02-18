@@ -4,6 +4,7 @@ Notarium é um editor de partituras em Rust com foco em Windows x64, com arquite
 
 ## Novidades estruturais (Staff System + Edição)
 
+- Núcleo de layout de pauta/notas migrado para C++ (`src/native/notation_engine.cpp`) via FFI (`src/cpp_engine.rs`) para reduzir instabilidades percebidas no caminho Rust puro.
 - Novo núcleo musical modular em `src/music/` (`staff`, `measure`, `clef`, `duration`, `note`).
 - Sistema de pautas com 5 linhas, múltiplas pautas por sistema, clave (Sol/Fá/Dó), armadura de clave e fórmula de compasso.
 - Barras de compasso automáticas por staff.

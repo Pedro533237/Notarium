@@ -13,3 +13,6 @@ rodio = { version = "0.17", default-features = false }
 
 [dev-dependencies]
 approx = "0.5"
+
+[build-dependencies]
+cc = "1"
