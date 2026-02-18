@@ -257,16 +257,6 @@ pub enum PitchClass {
 }
 
 impl PitchClass {
-    pub const ALL: [Self; 7] = [
-        Self::C,
-        Self::D,
-        Self::E,
-        Self::F,
-        Self::G,
-        Self::A,
-        Self::B,
-    ];
-
     pub fn semitone_offset(self) -> i32 {
         match self {
             Self::C => 0,
@@ -276,18 +266,6 @@ impl PitchClass {
             Self::G => 7,
             Self::A => 9,
             Self::B => 11,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::C => "C",
-            Self::D => "D",
-            Self::E => "E",
-            Self::F => "F",
-            Self::G => "G",
-            Self::A => "A",
-            Self::B => "B",
         }
     }
 }
@@ -415,6 +393,7 @@ pub struct Pitch {
 }
 
 impl Pitch {
+    #[cfg(test)]
     pub fn frequency_hz(self) -> f32 {
         let midi = (self.octave as i32 + 1) * 12 + self.class.semitone_offset();
         let semitones_from_a4 = midi - 69;

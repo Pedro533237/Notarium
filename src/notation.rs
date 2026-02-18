@@ -139,7 +139,7 @@ fn draw_notes_for_staff(
 
     let mut local_index = 0;
     let staff_notes = score.notes.iter().filter(|n| n.instrument == instrument);
-    let note_count = staff_notes.clone().count().max(1).min(24);
+    let note_count = staff_notes.clone().count().clamp(1, 24);
     let spacing = (rect.width() - 18.0) / note_count as f32;
 
     for note in staff_notes.take(24) {
