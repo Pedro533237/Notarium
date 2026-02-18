@@ -141,7 +141,6 @@ fn render_windows_shell(app: &mut NotariumUiApp) -> Result<(), UiAppError> {
         fn SetTextColor(hdc: Hdc, color: u32) -> u32;
         fn SetBkMode(hdc: Hdc, mode: i32) -> i32;
         fn TextOutW(hdc: Hdc, x: i32, y: i32, text: Lpcwstr, len: i32) -> Bool;
-        fn Rectangle(hdc: Hdc, left: i32, top: i32, right: i32, bottom: i32) -> Bool;
         fn MoveToEx(hdc: Hdc, x: i32, y: i32, prev: *mut Point) -> Bool;
         fn LineTo(hdc: Hdc, x: i32, y: i32) -> Bool;
     }
@@ -173,13 +172,14 @@ fn render_windows_shell(app: &mut NotariumUiApp) -> Result<(), UiAppError> {
                             model.app.go_to_new_score_step2();
                             let _ = unsafe { InvalidateRect(hwnd, std::ptr::null(), 1) };
                         }
-                    } else if model.app.state.current_screen == AppScreen::NewScoreStep2 {
-                        if (1080..=1320).contains(&x) && (760..=810).contains(&y) {
-                            if let Err(_error) = model.app.conclude_new_score() {
-                                model.app.back_to_home();
-                            }
-                            let _ = unsafe { InvalidateRect(hwnd, std::ptr::null(), 1) };
+                    } else if model.app.state.current_screen == AppScreen::NewScoreStep2
+                        && (1080..=1320).contains(&x)
+                        && (760..=810).contains(&y)
+                    {
+                        if let Err(_error) = model.app.conclude_new_score() {
+                            model.app.back_to_home();
                         }
+                        let _ = unsafe { InvalidateRect(hwnd, std::ptr::null(), 1) };
                     }
                 }
                 0
