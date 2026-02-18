@@ -188,6 +188,13 @@ struct NotariumApp {
     file_path_input: String,
     start_message: String,
     recent_scores: Vec<PathBuf>,
+    start_home_tab: StartHomeTab,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartHomeTab {
+    Recent,
+    Online,
 }
 
 impl Default for NotariumApp {
@@ -226,6 +233,7 @@ impl Default for NotariumApp {
             file_path_input: "notarium_score.ntr".to_owned(),
             start_message: "Pronto para criar ou abrir partitura.".to_owned(),
             recent_scores: find_recent_ntr_files(),
+            start_home_tab: StartHomeTab::Recent,
         }
     }
 }
@@ -306,58 +314,112 @@ impl NotariumApp {
     }
 
     fn render_start_screen(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.visuals_mut().panel_fill = egui::Color32::from_rgb(23, 25, 30);
+        let bg = egui::Color32::from_rgb(33, 35, 41);
+        let panel = egui::Color32::from_rgb(42, 45, 53);
+        let accent = egui::Color32::from_rgb(0, 170, 255);
+        ctx.style_mut(|style| {
+            style.visuals.window_fill = panel;
+            style.visuals.panel_fill = bg;
+            style.visuals.widgets.active.bg_fill = accent;
+            style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(64, 67, 76);
+            style.visuals.extreme_bg_color = egui::Color32::from_rgb(31, 33, 39);
+        });
 
-            ui.vertical(|ui| {
-                ui.add_space(8.0);
-                ui.heading(
-                    egui::RichText::new("Notarium")
-                        .size(34.0)
+        egui::TopBottomPanel::top("start_top_nav")
+            .exact_height(44.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    for (label, selected) in [
+                        ("Home", true),
+                        ("Score", false),
+                        ("Publish", false),
+                        ("Learn", false),
+                    ] {
+                        let text = if selected {
+                            egui::RichText::new(label)
+                                .strong()
+                                .color(egui::Color32::from_rgb(215, 235, 255))
+                        } else {
+                            egui::RichText::new(label).color(egui::Color32::from_rgb(176, 185, 202))
+                        };
+                        let _ = ui.add_sized([86.0, 28.0], egui::Button::new(text));
+                    }
+                });
+            });
+
+        egui::SidePanel::left("start_sidebar")
+            .resizable(false)
+            .exact_width(230.0)
+            .show(ctx, |ui| {
+                ui.add_space(12.0);
+                ui.label(
+                    egui::RichText::new("🎵 Notarium Team")
+                        .size(22.0)
+                        .strong()
                         .color(egui::Color32::WHITE),
                 );
                 ui.label(
-                    egui::RichText::new(
-                        "Hub moderno de partituras: crie, abra e gerencie arquivos .ntr",
-                    )
-                    .color(egui::Color32::from_rgb(190, 196, 210)),
+                    egui::RichText::new("Composição • Arranjo • Produção")
+                        .color(egui::Color32::from_rgb(164, 173, 188)),
                 );
+                ui.add_space(18.0);
+
+                for item in ["Scores", "Plugins", "Muse Sounds", "Learn", "Cloud"] {
+                    let _ = ui.add_sized([200.0, 34.0], egui::Button::new(item));
+                    ui.add_space(4.0);
+                }
+
+                ui.add_space(16.0);
+                ui.separator();
                 ui.add_space(10.0);
+                ui.label(
+                    egui::RichText::new("Atalhos")
+                        .strong()
+                        .color(egui::Color32::WHITE),
+                );
+                ui.label("Ctrl+N  Nova partitura");
+                ui.label("Ctrl+O  Abrir .ntr");
+                ui.label("Space   Play/Pause");
             });
 
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add_space(8.0);
+            ui.heading(
+                egui::RichText::new("Scores")
+                    .size(44.0)
+                    .strong()
+                    .color(egui::Color32::WHITE),
+            );
+
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.start_home_tab, StartHomeTab::Recent, "New & recent");
+                ui.selectable_value(&mut self.start_home_tab, StartHomeTab::Online, "My online scores");
+            });
+
+            ui.add_space(8.0);
             ui.columns(2, |columns| {
                 columns[0].group(|ui| {
                     ui.heading("Nova Partitura");
+                    ui.label("Configure os metadados e abra o editor com visual estilo Sibelius.");
                     ui.separator();
                     ui.label("Nome da partitura");
                     ui.text_edit_singleline(&mut self.start_title);
                     ui.label("Nome do compositor");
                     ui.text_edit_singleline(&mut self.start_composer);
-
                     egui::ComboBox::from_label("Tonalidade")
                         .selected_text(self.start_key_signature.label())
                         .show_ui(ui, |ui| {
                             for key in KeySignature::ALL {
-                                ui.selectable_value(
-                                    &mut self.start_key_signature,
-                                    key,
-                                    key.label(),
-                                );
+                                ui.selectable_value(&mut self.start_key_signature, key, key.label());
                             }
                         });
-
                     egui::ComboBox::from_label("Fórmula de compasso")
                         .selected_text(self.start_time_signature.label())
                         .show_ui(ui, |ui| {
                             for time in TimeSignature::ALL {
-                                ui.selectable_value(
-                                    &mut self.start_time_signature,
-                                    time,
-                                    time.label(),
-                                );
+                                ui.selectable_value(&mut self.start_time_signature, time, time.label());
                             }
                         });
-
                     egui::ComboBox::from_label("Tamanho do papel")
                         .selected_text(self.start_paper_size.label())
                         .show_ui(ui, |ui| {
@@ -365,20 +427,22 @@ impl NotariumApp {
                                 ui.selectable_value(&mut self.start_paper_size, size, size.label());
                             }
                         });
-
                     ui.add(egui::Slider::new(&mut self.bpm, 40.0..=220.0).text("BPM inicial"));
 
-                    if ui.button("✨ Criar e Abrir Editor").clicked() {
+                    if ui
+                        .add_sized([230.0, 34.0], egui::Button::new("✨ Criar e Abrir Editor"))
+                        .clicked()
+                    {
                         self.create_new_score_from_start();
                     }
                 });
 
                 columns[1].group(|ui| {
                     ui.heading("Partituras .ntr");
+                    ui.label("Abra e salve seus projetos locais.");
                     ui.separator();
                     ui.label("Caminho do arquivo (.ntr)");
                     ui.text_edit_singleline(&mut self.file_path_input);
-
                     ui.horizontal(|ui| {
                         if ui.button("📂 Abrir .ntr").clicked() {
                             self.open_ntr_from_input();
@@ -386,33 +450,61 @@ impl NotariumApp {
                         if ui.button("💾 Salvar .ntr").clicked() {
                             self.save_ntr();
                         }
+                        if ui.button("🔄 Atualizar").clicked() {
+                            self.recent_scores = find_recent_ntr_files();
+                        }
                     });
 
-                    if ui.button("🔄 Atualizar lista").clicked() {
-                        self.recent_scores = find_recent_ntr_files();
-                    }
-
                     ui.separator();
-                    ui.label("Recentes");
-                    egui::ScrollArea::vertical()
-                        .max_height(320.0)
-                        .show(ui, |ui| {
-                            let recent = self.recent_scores.clone();
-                            for path in recent {
-                                let label = path
-                                    .file_name()
-                                    .and_then(|f| f.to_str())
-                                    .unwrap_or("arquivo.ntr");
-                                if ui.button(label).clicked() {
-                                    self.open_ntr_from_path(path);
-                                }
+                    egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                        if self.recent_scores.is_empty() {
+                            ui.label("Nenhum arquivo .ntr encontrado no diretório atual.");
+                        }
+                        let recent = self.recent_scores.clone();
+                        for path in recent {
+                            let label = path
+                                .file_name()
+                                .and_then(|f| f.to_str())
+                                .unwrap_or("arquivo.ntr");
+                            if ui.add_sized([290.0, 26.0], egui::Button::new(format!("🎼 {label}"))).clicked() {
+                                self.open_ntr_from_path(path);
                             }
-                        });
+                        }
+                    });
                 });
             });
 
             ui.add_space(8.0);
-            ui.label(egui::RichText::new(&self.start_message).color(egui::Color32::LIGHT_GREEN));
+            match self.start_home_tab {
+                StartHomeTab::Recent => {
+                    ui.label(egui::RichText::new("New & recent").strong().size(20.0));
+                    ui.horizontal_wrapped(|ui| {
+                        for preview in [
+                            "Concerto em Ré - Strings",
+                            "Suite de Câmara",
+                            "Piano Lead Sheet",
+                        ] {
+                            egui::Frame::group(ui.style())
+                                .fill(egui::Color32::from_rgb(50, 53, 61))
+                                .show(ui, |ui| {
+                                    ui.set_min_size(egui::vec2(180.0, 136.0));
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(egui::RichText::new("♪ ♫ ♬").size(30.0));
+                                        ui.add_space(6.0);
+                                        ui.label(preview);
+                                    });
+                                });
+                        }
+                    });
+                }
+                StartHomeTab::Online => {
+                    ui.label(egui::RichText::new("My online scores").strong().size(20.0));
+                    ui.label("Integração cloud preparada para sincronização futura de projetos Notarium.");
+                }
+            }
+
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new(&self.start_message).color(egui::Color32::from_rgb(139, 231, 184)));
         });
     }
 

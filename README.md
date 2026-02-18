@@ -42,6 +42,11 @@ Redução prática de alertas:
 - manter distribuição consistente (mesmo nome/hash por release oficial);
 - publicar releases estáveis e usar reputação de download.
 
+
+## Stack musical recomendado
+
+Há um guia prático com bibliotecas e fluxo de evolução em `docs_music_stack.md`.
+
 ## Melhorias de velocidade de compilação
 
 - CI com cache (`Swatinem/rust-cache`) para reduzir tempo em builds repetidos.
