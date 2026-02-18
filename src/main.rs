@@ -884,7 +884,7 @@ fn pitch_to_staff_position(pitch: Pitch) -> f32 {
 
 fn midi_to_pitch(midi: i32, accidental: Accidental) -> Pitch {
     let octave = (midi / 12 - 1) as i8;
-    let semitone = ((midi % 12) + 12) % 12;
+    let semitone = midi.rem_euclid(12);
     let class = match semitone {
         0 | 1 => PitchClass::C,
         2 | 3 => PitchClass::D,
