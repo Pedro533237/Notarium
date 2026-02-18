@@ -23,13 +23,27 @@ Notarium é uma base de arquitetura em Rust para editor profissional de notaçã
 /theme
 ```
 
-## Executar
+## Gerar EXE (Windows)
 
 ```bash
-cargo run
+cargo build --release
 ```
 
-## Validar
+Saída esperada:
+
+```text
+target/release/notarium.exe
+```
+
+## Rodar EXE gerado (Windows)
+
+```powershell
+.\target\release\notarium.exe
+```
+
+O app abre uma interface nativa do Windows (sem depender só do prompt de comando).
+
+## Validar no ambiente de desenvolvimento
 
 ```bash
 cargo fmt --check
