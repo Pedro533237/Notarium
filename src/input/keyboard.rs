@@ -1,11 +1,13 @@
 use egui::Key;
 
-use crate::music::{Note, NoteDuration, PitchClass};
+use crate::music::{Accidental, Note, NoteDuration, PitchClass};
 
 pub enum KeyboardAction {
     Delete,
     Duration(NoteDuration),
     PitchStep(i8),
+    InsertPitch(PitchClass),
+    SetAccidental(Accidental),
 }
 
 pub fn collect_actions(ctx: &egui::Context) -> Vec<KeyboardAction> {
@@ -33,6 +35,33 @@ pub fn collect_actions(ctx: &egui::Context) -> Vec<KeyboardAction> {
         if ctx.input(|i| i.key_pressed(key)) {
             actions.push(KeyboardAction::Duration(duration));
         }
+    }
+
+    for (key, pitch) in [
+        (Key::A, PitchClass::C),
+        (Key::S, PitchClass::D),
+        (Key::D, PitchClass::E),
+        (Key::F, PitchClass::F),
+        (Key::G, PitchClass::G),
+        (Key::H, PitchClass::A),
+        (Key::J, PitchClass::B),
+    ] {
+        if ctx.input(|i| i.key_pressed(key)) {
+            actions.push(KeyboardAction::InsertPitch(pitch));
+        }
+    }
+
+    if ctx.input(|i| i.key_pressed(Key::Q)) {
+        actions.push(KeyboardAction::SetAccidental(Accidental::Sharp));
+    }
+    if ctx.input(|i| i.key_pressed(Key::W)) {
+        actions.push(KeyboardAction::SetAccidental(Accidental::Flat));
+    }
+    if ctx.input(|i| i.key_pressed(Key::E)) {
+        actions.push(KeyboardAction::SetAccidental(Accidental::Natural));
+    }
+    if ctx.input(|i| i.key_pressed(Key::R)) {
+        actions.push(KeyboardAction::SetAccidental(Accidental::None));
     }
 
     actions

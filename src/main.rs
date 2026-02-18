@@ -28,8 +28,8 @@ use glutin_winit::DisplayBuilder;
 use input::keyboard::{apply_pitch_step, collect_actions, KeyboardAction};
 use input::mouse::primary_click_position;
 use music::{
-    Clef, DurationValue, Instrument, KeySignature, Note, NoteEvent, NoteId, PaperSize, Pitch,
-    PitchClass, Score, ScoreSettings, StaffSystem, TimeSignature,
+    Accidental, Clef, DurationValue, Instrument, KeySignature, Note, NoteEvent, NoteId, PaperSize,
+    Pitch, PitchClass, Score, ScoreSettings, StaffSystem, TimeSignature,
 };
 use raw_window_handle::HasWindowHandle;
 use render::{GlProfile, Renderer};
@@ -267,6 +267,7 @@ struct NotariumApp {
     start_time_signature: TimeSignature,
     start_paper_size: PaperSize,
     selected_pitch: PitchClass,
+    selected_accidental: Accidental,
     selected_octave: i8,
     selected_duration: DurationValue,
     selected_instrument: Instrument,
@@ -275,7 +276,7 @@ struct NotariumApp {
     screen: AppScreen,
     playback: audio::PlaybackController,
     is_paused: bool,
-    orchestral_order: Vec<Instrument>,
+    staff_instruments: Vec<Instrument>,
     zoom_percent: f32,
     file_path_input: String,
     start_message: String,
@@ -287,6 +288,7 @@ struct NotariumApp {
     edit_mode: EditMode,
     next_note_id: NoteId,
     snap_grid: f32,
+    note_info: String,
 }
 
 impl Default for NotariumApp {
@@ -306,6 +308,7 @@ impl NotariumApp {
             start_time_signature: settings.time_signature,
             start_paper_size: settings.paper_size,
             selected_pitch: PitchClass::C,
+            selected_accidental: Accidental::None,
             selected_octave: 4,
             selected_duration: DurationValue::Quarter,
             selected_instrument: Instrument::Violin,
@@ -314,17 +317,7 @@ impl NotariumApp {
             screen: AppScreen::Start,
             playback: audio::PlaybackController::new(),
             is_paused: false,
-            orchestral_order: vec![
-                Instrument::Flute,
-                Instrument::Clarinet,
-                Instrument::Trumpet,
-                Instrument::Horn,
-                Instrument::Violin,
-                Instrument::Viola,
-                Instrument::Cello,
-                Instrument::Timpani,
-                Instrument::Piano,
-            ],
+            staff_instruments: vec![Instrument::Violin, Instrument::Piano],
             zoom_percent: 62.5,
             file_path_input: "notarium_score.ntr".to_owned(),
             start_message: "Pronto para criar ou abrir partitura.".to_owned(),
@@ -339,6 +332,7 @@ impl NotariumApp {
             edit_mode: EditMode::None,
             next_note_id: 1,
             snap_grid: 0.25,
+            note_info: "Nenhuma nota selecionada".to_owned(),
             settings,
         }
     }
@@ -366,6 +360,7 @@ impl NotariumApp {
         self.score.notes.clear();
         self.visual_notes.clear();
         self.selection = SelectionState::default();
+        self.note_info = "Nenhuma nota selecionada".to_owned();
         self.edit_mode = EditMode::None;
         self.screen = AppScreen::Editor;
         self.start_message = "Nova partitura criada.".to_owned();
@@ -376,6 +371,7 @@ impl NotariumApp {
             Pitch {
                 class: self.selected_pitch,
                 octave: self.selected_octave,
+                accidental: self.selected_accidental,
             },
             self.selected_duration,
             self.selected_instrument,
@@ -394,44 +390,113 @@ impl NotariumApp {
             .ensure_layout_for_beats(self.score.total_beats());
     }
 
-    fn apply_keyboard_editing(&mut self, ctx: &egui::Context) {
-        let Some(selected) = self.selection.selected_note else {
-            return;
-        };
+    fn add_note_from_pitch(&mut self, pitch: Pitch) {
+        let evt = NoteEvent::new(pitch, self.selected_duration, self.selected_instrument);
+        self.score.notes.push(evt.clone());
+        let staff_pos = pitch_to_staff_position(evt.pitch);
+        let note = Note::new(self.next_note_id, evt.pitch, evt.duration, staff_pos);
+        self.next_note_id += 1;
+        self.visual_notes.push(note);
+        self.staff_system
+            .ensure_layout_for_beats(self.score.total_beats());
+    }
 
+    fn add_note_from_staff_click(&mut self, click: egui::Pos2, page_rect: egui::Rect) {
+        let zoom = (self.zoom_percent / 100.0).clamp(0.45, 2.0);
+        let staff_height = 40.0 * zoom;
+        let vertical_gap = 42.0 * zoom;
+        let top = page_rect.top() + 120.0 * zoom;
+
+        for (staff_idx, _) in self.staff_system.staffs.iter().enumerate() {
+            let y = top + staff_idx as f32 * (staff_height + vertical_gap);
+            let staff_rect = egui::Rect::from_min_max(
+                egui::Pos2::new(page_rect.left() + 95.0 * zoom, y),
+                egui::Pos2::new(page_rect.right() - 24.0 * zoom, y + staff_height),
+            );
+            if staff_rect.contains(click) {
+                let staff_position =
+                    (staff_rect.center().y - click.y) / (staff_rect.height() / 8.0);
+                let snapped = (staff_position * 2.0).round() / 2.0;
+                let midi = 64 + (snapped * 2.0).round() as i32;
+                let pitch = midi_to_pitch(midi, self.selected_accidental);
+                self.selected_pitch = pitch.class;
+                self.selected_octave = pitch.octave;
+                if let Some(instrument) = self.staff_instruments.get(staff_idx).copied() {
+                    self.selected_instrument = instrument;
+                }
+                self.add_note_from_pitch(pitch);
+                break;
+            }
+        }
+    }
+
+    fn refresh_note_info(&mut self) {
+        if let Some(id) = self.selection.selected_note {
+            if let Some(note) = self.visual_notes.iter().find(|n| n.id == id) {
+                self.note_info = format!(
+                    "{} • {:.2} Hz • {}",
+                    note.pitch.label(),
+                    note.pitch.frequency_hz(),
+                    note.duration.label()
+                );
+                return;
+            }
+        }
+        self.note_info = "Nenhuma nota selecionada".to_owned();
+    }
+
+    fn apply_keyboard_editing(&mut self, ctx: &egui::Context) {
         for action in collect_actions(ctx) {
             match action {
+                KeyboardAction::InsertPitch(pitch_class) => {
+                    let pitch = Pitch {
+                        class: pitch_class,
+                        octave: self.selected_octave,
+                        accidental: self.selected_accidental,
+                    };
+                    self.selected_pitch = pitch_class;
+                    self.add_note_from_pitch(pitch);
+                }
+                KeyboardAction::SetAccidental(accidental) => {
+                    self.selected_accidental = accidental;
+                }
                 KeyboardAction::Delete => {
-                    self.delete_note(selected);
-                    break;
+                    if let Some(selected) = self.selection.selected_note {
+                        self.delete_note(selected);
+                    }
                 }
                 KeyboardAction::Duration(duration) => {
-                    if let Some(idx) = self.find_note_index(selected) {
-                        if let Some(note) = self.visual_notes.get_mut(idx) {
-                            note.duration = duration;
-                        }
-                        if let Some(evt) = self.score.notes.get_mut(idx) {
-                            evt.duration = duration;
+                    if let Some(selected) = self.selection.selected_note {
+                        if let Some(idx) = self.find_note_index(selected) {
+                            if let Some(note) = self.visual_notes.get_mut(idx) {
+                                note.duration = duration;
+                            }
+                            if let Some(evt) = self.score.notes.get_mut(idx) {
+                                evt.duration = duration;
+                            }
                         }
                     }
                 }
                 KeyboardAction::PitchStep(step) => {
-                    if let Some(idx) = self.find_note_index(selected) {
-                        let mut updated_pitch = None;
-                        if let Some(note) = self.visual_notes.get_mut(idx) {
-                            apply_pitch_step(note, step);
-                            note.staff_position = pitch_to_staff_position(note.pitch);
-                            updated_pitch = Some(note.pitch);
-                        }
-                        if let (Some(evt), Some(pitch)) =
-                            (self.score.notes.get_mut(idx), updated_pitch)
-                        {
-                            evt.pitch = pitch;
+                    if let Some(selected) = self.selection.selected_note {
+                        if let Some(idx) = self.find_note_index(selected) {
+                            let mut updated_pitch = None;
+                            if let Some(note) = self.visual_notes.get_mut(idx) {
+                                apply_pitch_step(note, step);
+                                note.staff_position = pitch_to_staff_position(note.pitch);
+                                updated_pitch = Some(note.pitch);
+                            }
+                            if let (Some(evt), Some(pitch)) =
+                                (self.score.notes.get_mut(idx), updated_pitch)
+                            {
+                                evt.pitch = pitch;
+                            }
                         }
                     }
                 }
             }
         }
+        self.refresh_note_info();
     }
 
     fn find_note_index(&self, id: NoteId) -> Option<usize> {
@@ -608,6 +673,41 @@ impl NotariumApp {
                 ui.separator();
                 ui.label(format!("OpenGL alvo: {}", self.renderer.gl_profile.label()));
                 ui.separator();
+                if ui.button("▶ Reproduzir").clicked() {
+                    self.playback.play(self.score.clone(), self.bpm);
+                }
+                if ui.button("⏹ Parar").clicked() {
+                    self.playback.stop();
+                }
+                if ui.button("⏺ Gravar").clicked() {
+                    self.start_message = "Gravação MIDI em breve".to_owned();
+                }
+                if ui.button("Inserção de notas").clicked() {
+                    self.start_message = "Modo inserção ativo".to_owned();
+                }
+                if ui.button("Acidentes").clicked() {
+                    self.start_message = "Atalhos Q/W/E/R para acidentes".to_owned();
+                }
+                if ui.button("Dinâmicas").clicked() {
+                    self.start_message = "Dinâmicas em roadmap".to_owned();
+                }
+                if ui.button("Layout").clicked() {
+                    self.start_message = "Layout responsivo ativo".to_owned();
+                }
+                if ui.button("Adicionar pauta").clicked() {
+                    let idx = self.staff_system.staffs.len();
+                    self.staff_system.staffs.push(crate::music::Staff::new(
+                        idx,
+                        self.selected_clef,
+                        self.settings.key_signature,
+                        self.settings.time_signature,
+                    ));
+                    self.staff_instruments.push(self.selected_instrument);
+                }
+                if self.staff_system.staffs.len() > 1 && ui.button("Remover pauta").clicked() {
+                    self.staff_system.staffs.pop();
+                    self.staff_instruments.pop();
+                }
                 if ui.button("💾 Salvar .ntr").clicked() {
                     self.save_ntr();
                 }
@@ -625,6 +725,18 @@ impl NotariumApp {
                 ui.separator();
 
                 ui.label(format!("Perfil GL ativo (fallback): {}", self.renderer.gl_profile.label()));
+                if !self.staff_instruments.is_empty() {
+                    ui.label("Instrumento por pauta (mixer básico)");
+                    for (idx, instrument) in self.staff_instruments.iter_mut().enumerate() {
+                        egui::ComboBox::from_label(format!("Pauta {}", idx + 1))
+                            .selected_text(instrument.label())
+                            .show_ui(ui, |ui| {
+                                for option in Instrument::ALL {
+                                    ui.selectable_value(instrument, option, option.label());
+                                }
+                            });
+                    }
+                }
 
                 egui::ComboBox::from_label("Instrumento")
                     .selected_text(self.selected_instrument.label())
@@ -647,6 +759,18 @@ impl NotariumApp {
                     .show_ui(ui, |ui| {
                         for pitch in PitchClass::ALL {
                             ui.selectable_value(&mut self.selected_pitch, pitch, pitch.label());
+                        }
+                    });
+
+                egui::ComboBox::from_label("Acidente")
+                    .selected_text(self.selected_accidental.label())
+                    .show_ui(ui, |ui| {
+                        for accidental in Accidental::ALL {
+                            ui.selectable_value(
+                                &mut self.selected_accidental,
+                                accidental,
+                                accidental.label(),
+                            );
                         }
                     });
 
@@ -715,7 +839,7 @@ impl NotariumApp {
                     &self.score,
                     &self.visual_notes,
                     &self.staff_system,
-                    &self.orchestral_order,
+                    &self.staff_instruments,
                     "Movement II (excerpt) - Page 1",
                     self.zoom_percent,
                     &self.selection,
@@ -723,9 +847,15 @@ impl NotariumApp {
 
                 if let Some(cursor) = primary_click_position(&response) {
                     let hit = self.selection.hit_test(cursor, &overlays);
-                    self.selection.set_selected(hit, &mut self.visual_notes);
+                    if hit.is_some() {
+                        self.selection.set_selected(hit, &mut self.visual_notes);
+                    } else {
+                        self.add_note_from_staff_click(cursor, response.rect);
+                        self.selection.set_selected(None, &mut self.visual_notes);
+                    }
                     self.selection.focus = hit.is_some();
                     self.edit_mode = hit.map_or(EditMode::None, EditMode::NoteSelected);
+                    self.refresh_note_info();
                 }
             });
         });
@@ -735,6 +865,8 @@ impl NotariumApp {
                 ui.label(format!("Compassos: {:.1} • unidade:{:?}", self.score.total_measures(self.settings.time_signature), self.settings.time_signature.beat_unit()));
                 ui.separator();
                 ui.label(format!("Seleção: {:?} • foco:{}", self.selection.selected_note, self.selection.focus));
+                ui.separator();
+                ui.label(format!("Nota: {}", self.note_info));
                 ui.separator();
                 ui.label(format!("Zoom: {:.1}%", self.zoom_percent));
                 ui.separator();
@@ -748,6 +880,25 @@ fn pitch_to_staff_position(pitch: Pitch) -> f32 {
     let midi = pitch.midi_number();
     let e4_midi = 64;
     (midi - e4_midi) as f32 * 0.5
+}
+
+fn midi_to_pitch(midi: i32, accidental: Accidental) -> Pitch {
+    let octave = (midi / 12 - 1) as i8;
+    let semitone = ((midi % 12) + 12) % 12;
+    let class = match semitone {
+        0 | 1 => PitchClass::C,
+        2 | 3 => PitchClass::D,
+        4 => PitchClass::E,
+        5 | 6 => PitchClass::F,
+        7 | 8 => PitchClass::G,
+        9 | 10 => PitchClass::A,
+        _ => PitchClass::B,
+    };
+    Pitch {
+        class,
+        octave,
+        accidental,
+    }
 }
 
 fn find_recent_ntr_files() -> Vec<PathBuf> {
@@ -794,9 +945,10 @@ fn serialize_ntr(settings: &ScoreSettings, score: &Score, bpm: f32) -> String {
     out.push_str("notes:\n");
     for note in &score.notes {
         out.push_str(&format!(
-            "{},{:?},{},{:?},{},{},{},{}\n",
+            "{},{:?},{:?},{},{:?},{},{},{},{}\n",
             note.pitch.octave,
             note.pitch.class,
+            note.pitch.accidental,
             note.duration.beats(),
             note.instrument,
             note.dotted,
@@ -857,15 +1009,33 @@ fn deserialize_ntr(contents: &str) -> Result<(ScoreSettings, Score, f32), String
             }
             let octave = parts[0].parse::<i8>().unwrap_or(4);
             let class = parse_pitch(parts[1]).unwrap_or(PitchClass::C);
-            let beats = parts[2].parse::<f32>().unwrap_or(1.0);
+            let (accidental, beats_index, instrument_index, extras_index) = if parts.len() >= 9 {
+                (
+                    parse_accidental(parts[2]).unwrap_or(Accidental::None),
+                    3,
+                    4,
+                    5,
+                )
+            } else {
+                (Accidental::None, 2, 3, 4)
+            };
+            let beats = parts[beats_index].parse::<f32>().unwrap_or(1.0);
             let duration = DurationValue::from_beats(beats);
-            let instrument = parse_instrument(parts[3]).unwrap_or(Instrument::Piano);
-            let mut evt = NoteEvent::new(Pitch { class, octave }, duration, instrument);
-            if parts.len() >= 8 {
-                evt.dotted = parts[4].parse::<bool>().unwrap_or(false);
-                evt.tie_start = parts[5].parse::<bool>().unwrap_or(false);
-                evt.tie_end = parts[6].parse::<bool>().unwrap_or(false);
-                evt.velocity = parts[7].parse::<u8>().unwrap_or(100);
+            let instrument = parse_instrument(parts[instrument_index]).unwrap_or(Instrument::Piano);
+            let mut evt = NoteEvent::new(
+                Pitch {
+                    class,
+                    octave,
+                    accidental,
+                },
+                duration,
+                instrument,
+            );
+            if parts.len() >= extras_index + 4 {
+                evt.dotted = parts[extras_index].parse::<bool>().unwrap_or(false);
+                evt.tie_start = parts[extras_index + 1].parse::<bool>().unwrap_or(false);
+                evt.tie_end = parts[extras_index + 2].parse::<bool>().unwrap_or(false);
+                evt.velocity = parts[extras_index + 3].parse::<u8>().unwrap_or(100);
             }
             notes.push(evt);
         }
@@ -927,6 +1097,16 @@ fn parse_pitch(input: &str) -> Option<PitchClass> {
         "G" => PitchClass::G,
         "A" => PitchClass::A,
         "B" => PitchClass::B,
+        _ => return None,
+    })
+}
+
+fn parse_accidental(input: &str) -> Option<Accidental> {
+    Some(match input.trim() {
+        "Sharp" => Accidental::Sharp,
+        "Flat" => Accidental::Flat,
+        "Natural" => Accidental::Natural,
+        "None" => Accidental::None,
         _ => return None,
     })
 }

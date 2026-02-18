@@ -9,6 +9,44 @@ pub enum StemDirection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Accidental {
+    Sharp,
+    Flat,
+    Natural,
+    None,
+}
+
+impl Accidental {
+    pub const ALL: [Self; 4] = [Self::None, Self::Sharp, Self::Flat, Self::Natural];
+
+    pub fn semitone(self) -> i32 {
+        match self {
+            Self::Sharp => 1,
+            Self::Flat => -1,
+            Self::Natural | Self::None => 0,
+        }
+    }
+
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Self::Sharp => "♯",
+            Self::Flat => "♭",
+            Self::Natural => "♮",
+            Self::None => "",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Sharp => "Sustenido",
+            Self::Flat => "Bemol",
+            Self::Natural => "Bequadro",
+            Self::None => "Sem acidente",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PitchClass {
     C,
     D,
@@ -59,17 +97,29 @@ impl PitchClass {
 pub struct Pitch {
     pub class: PitchClass,
     pub octave: i8,
+    pub accidental: Accidental,
 }
 
 impl Pitch {
     pub fn frequency_hz(self) -> f32 {
-        let midi = (self.octave as i32 + 1) * 12 + self.class.semitone_offset();
+        let midi = (self.octave as i32 + 1) * 12
+            + self.class.semitone_offset()
+            + self.accidental.semitone();
         let semitones_from_a4 = midi - 69;
         440.0 * 2.0_f32.powf(semitones_from_a4 as f32 / 12.0)
     }
 
     pub fn midi_number(self) -> i32 {
-        (self.octave as i32 + 1) * 12 + self.class.semitone_offset()
+        (self.octave as i32 + 1) * 12 + self.class.semitone_offset() + self.accidental.semitone()
+    }
+
+    pub fn label(self) -> String {
+        format!(
+            "{}{}{}",
+            self.class.label(),
+            self.accidental.symbol(),
+            self.octave
+        )
     }
 }
 

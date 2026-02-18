@@ -5,7 +5,7 @@ pub mod staff;
 
 pub use duration::NoteDuration;
 pub use measure::TimeSignature;
-pub use note::{Note, NoteEvent, NoteId, Pitch, PitchClass, StemDirection};
+pub use note::{Accidental, Note, NoteEvent, NoteId, Pitch, PitchClass, StemDirection};
 pub use staff::{Clef, KeySignature, Staff, StaffSystem};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,6 +116,7 @@ mod tests {
         let pitch = Pitch {
             class: PitchClass::A,
             octave: 4,
+            accidental: Accidental::None,
         };
 
         assert_relative_eq!(pitch.frequency_hz(), 440.0, epsilon = 0.001);
@@ -129,6 +130,7 @@ mod tests {
                     Pitch {
                         class: PitchClass::C,
                         octave: 4,
+                        accidental: Accidental::None,
                     },
                     NoteDuration::Half,
                     Instrument::Piano,
@@ -137,6 +139,7 @@ mod tests {
                     Pitch {
                         class: PitchClass::G,
                         octave: 4,
+                        accidental: Accidental::None,
                     },
                     NoteDuration::Quarter,
                     Instrument::Piano,

@@ -27,6 +27,17 @@ O renderer foi preparado para perfis legados:
 
 Fallback automático de contexto na inicialização (ordem): **OpenGL 2.0 → OpenGL 2.1 → OpenGL ES 2.0 → padrão do driver**.
 
+
+## Recursos de edição adicionados
+
+- Inserção de nota por clique direto na pauta (converte posição vertical em pitch).
+- Inserção por teclado (`A S D F G H J` para notas; `Q/W/E/R` para acidentes).
+- Acidentes visuais e lógicos: sustenido, bemol e bequadro.
+- Barra superior reorganizada com ações principais (reproduzir/parar/gravar/inserção/acidentes/dinâmicas/layout/adicionar pauta).
+- Botões para adicionar/remover pauta em tempo real com instrumento por pauta (mixer básico).
+- Painel de identificação da nota selecionada no status (nome, frequência e duração).
+- Espaçamento horizontal proporcional à duração das notas e beam simples para colcheias e menores consecutivas.
+
 ## Estrutura de código
 
 ```text
