@@ -1,4 +1,31 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Accidental {
+    Natural,
+    Sharp,
+    Flat,
+}
+
+impl Accidental {
+    pub const ALL: [Self; 3] = [Self::Natural, Self::Sharp, Self::Flat];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Natural => "♮",
+            Self::Sharp => "♯",
+            Self::Flat => "♭",
+        }
+    }
+
+    pub fn semitone_offset(self) -> i32 {
+        match self {
+            Self::Natural => 0,
+            Self::Sharp => 1,
+            Self::Flat => -1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DurationValue {
     Whole,
     Half,
@@ -393,11 +420,19 @@ impl Pitch {
         let semitones_from_a4 = midi - 69;
         440.0 * 2.0_f32.powf(semitones_from_a4 as f32 / 12.0)
     }
+
+    pub fn frequency_hz_with_accidental(self, accidental: Accidental) -> f32 {
+        let midi = (self.octave as i32 + 1) * 12 + self.class.semitone_offset();
+        let midi = midi + accidental.semitone_offset();
+        let semitones_from_a4 = midi - 69;
+        440.0 * 2.0_f32.powf(semitones_from_a4 as f32 / 12.0)
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct NoteEvent {
     pub pitch: Pitch,
+    pub accidental: Accidental,
     pub duration: DurationValue,
     pub instrument: Instrument,
 }
@@ -441,6 +476,7 @@ mod tests {
                         class: PitchClass::C,
                         octave: 4,
                     },
+                    accidental: Accidental::Natural,
                     duration: DurationValue::Half,
                     instrument: Instrument::Piano,
                 },
@@ -449,6 +485,7 @@ mod tests {
                         class: PitchClass::G,
                         octave: 4,
                     },
+                    accidental: Accidental::Natural,
                     duration: DurationValue::Quarter,
                     instrument: Instrument::Piano,
                 },

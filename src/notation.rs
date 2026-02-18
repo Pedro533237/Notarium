@@ -9,12 +9,19 @@ pub struct NotePlacement {
     pub pitch: crate::music::Pitch,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyboardTool {
+    None,
+    Insert,
+}
+
 pub fn draw_orchestral_page(
     ui: &mut egui::Ui,
     score: &Score,
     instruments: &[Instrument],
     page_label: &str,
     zoom_percent: f32,
+    selected_tool: KeyboardTool,
 ) -> Option<NotePlacement> {
     let zoom = (zoom_percent / 100.0).clamp(0.5, 2.0);
     let desired_size = Vec2::new((860.0 * zoom).max(ui.available_width()), 1180.0 * zoom);
@@ -69,7 +76,8 @@ pub fn draw_orchestral_page(
         draw_measure_lines(&painter, staff_rect, 6);
         draw_notes_for_staff(&painter, staff_rect, score, idx, *instrument);
 
-        if response.clicked()
+        if selected_tool == KeyboardTool::Insert
+            && response.clicked()
             && response.interact_pointer_pos().is_some_and(|pos| {
                 staff_rect
                     .expand2(Vec2::new(0.0, 24.0 * zoom))
