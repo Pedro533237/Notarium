@@ -2,17 +2,25 @@ use egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, Vec2};
 
 use crate::music::{DurationValue, Instrument, NoteEvent, PitchClass, Score};
 
+#[derive(Debug, Clone, Copy)]
+pub struct NotePlacement {
+    pub instrument: Instrument,
+    pub insert_index: usize,
+    pub pitch: crate::music::Pitch,
+}
+
 pub fn draw_orchestral_page(
     ui: &mut egui::Ui,
     score: &Score,
     instruments: &[Instrument],
     page_label: &str,
     zoom_percent: f32,
-) {
+) -> Option<NotePlacement> {
     let zoom = (zoom_percent / 100.0).clamp(0.5, 2.0);
     let desired_size = Vec2::new((860.0 * zoom).max(ui.available_width()), 1180.0 * zoom);
-    let (rect, _) = ui.allocate_exact_size(desired_size, egui::Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
     let painter = ui.painter_at(rect);
+    let mut placement = None;
 
     painter.rect_filled(rect, 6.0, Color32::from_rgb(250, 248, 242));
     painter.rect_stroke(
@@ -61,11 +69,31 @@ pub fn draw_orchestral_page(
         draw_measure_lines(&painter, staff_rect, 6);
         draw_notes_for_staff(&painter, staff_rect, score, idx, *instrument);
 
+        if response.clicked()
+            && response.interact_pointer_pos().is_some_and(|pos| {
+                staff_rect
+                    .expand2(Vec2::new(0.0, 24.0 * zoom))
+                    .contains(pos)
+            })
+        {
+            if let Some(pointer) = response.interact_pointer_pos() {
+                let pitch = pitch_from_y(staff_rect, pointer.y);
+                let insert_index = slot_from_x(staff_rect, pointer.x);
+                placement = Some(NotePlacement {
+                    instrument: *instrument,
+                    insert_index,
+                    pitch,
+                });
+            }
+        }
+
         y += 78.0 * zoom;
         if y > rect.bottom() - 90.0 * zoom {
             break;
         }
     }
+
+    placement
 }
 
 fn draw_staff(painter: &egui::Painter, rect: Rect) {
@@ -101,17 +129,17 @@ fn draw_notes_for_staff(
         return;
     }
 
-    let note_count = score.notes.len().min(16);
+    let mut local_index = 0;
+    let staff_notes = score.notes.iter().filter(|n| n.instrument == instrument);
+    let note_count = staff_notes.clone().count().max(1).min(24);
     let spacing = (rect.width() - 18.0) / note_count as f32;
 
-    for i in 0..note_count {
-        let note = &score.notes[i];
-
-        if i % 4 == 0 && note.instrument != instrument {
+    for note in staff_notes.take(24) {
+        if note.instrument != instrument {
             continue;
         }
 
-        let x = rect.left() + 12.0 + i as f32 * spacing;
+        let x = rect.left() + 12.0 + local_index as f32 * spacing;
         let y = note_y(rect, note, staff_index);
 
         draw_notehead(painter, Pos2::new(x, y), note.duration);
@@ -129,6 +157,8 @@ fn draw_notes_for_staff(
                 Stroke::new(1.0, Color32::BLACK),
             );
         }
+
+        local_index += 1;
     }
 }
 
@@ -154,8 +184,47 @@ fn note_y(rect: Rect, note: &NoteEvent, staff_index: usize) -> f32 {
 fn needs_stem(duration: DurationValue) -> bool {
     matches!(
         duration,
-        DurationValue::Half | DurationValue::Quarter | DurationValue::Eighth
+        DurationValue::Half
+            | DurationValue::Quarter
+            | DurationValue::Eighth
+            | DurationValue::Sixteenth
+            | DurationValue::ThirtySecond
+            | DurationValue::SixtyFourth
     )
+}
+
+fn pitch_from_y(rect: Rect, y: f32) -> crate::music::Pitch {
+    let mut best = (0_u8, 0.0_f32);
+    for midi in 36..=96 {
+        let approx_y = rect.center().y + 14.0 - (midi - 64) as f32 * 2.5;
+        let dist = (approx_y - y).abs();
+        if midi == 36 || dist < best.1 {
+            best = (midi as u8, dist);
+        }
+    }
+
+    midi_to_pitch(best.0)
+}
+
+fn slot_from_x(rect: Rect, x: f32) -> usize {
+    let normalized = ((x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+    (normalized * 64.0).round() as usize
+}
+
+fn midi_to_pitch(midi: u8) -> crate::music::Pitch {
+    let semitone = midi % 12;
+    let octave = midi as i8 / 12 - 1;
+    let class = match semitone {
+        0 | 1 => PitchClass::C,
+        2 | 3 => PitchClass::D,
+        4 => PitchClass::E,
+        5 | 6 => PitchClass::F,
+        7 | 8 => PitchClass::G,
+        9 | 10 => PitchClass::A,
+        _ => PitchClass::B,
+    };
+
+    crate::music::Pitch { class, octave }
 }
 
 fn instrument_short_name(instrument: Instrument) -> &'static str {

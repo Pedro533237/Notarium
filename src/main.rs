@@ -22,8 +22,8 @@ use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 use music::{
-    DurationValue, Instrument, KeySignature, NoteEvent, PaperSize, Pitch, PitchClass, Score,
-    ScoreSettings, TimeSignature,
+    Articulation, Clef, DurationValue, DynamicMark, Instrument, KeySignature, NoteEvent, Ornament,
+    PaperSize, Pitch, PitchClass, Score, ScoreSettings, TimeSignature,
 };
 
 fn main() {
@@ -283,12 +283,30 @@ struct NotariumApp {
     start_message: String,
     recent_scores: Vec<PathBuf>,
     start_home_tab: StartHomeTab,
+    score_view_mode: ScoreViewMode,
+    selected_clef: Clef,
+    selected_dynamic: DynamicMark,
+    selected_articulation: Articulation,
+    selected_ornament: Ornament,
+    playback_engine: PlaybackEngine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StartHomeTab {
     Recent,
     Online,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScoreViewMode {
+    SinglePage,
+    FacingPages,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlaybackEngine {
+    Notarium,
+    NotePerformer,
 }
 
 impl Default for NotariumApp {
@@ -328,6 +346,12 @@ impl Default for NotariumApp {
             start_message: "Pronto para criar ou abrir partitura.".to_owned(),
             recent_scores: find_recent_ntr_files(),
             start_home_tab: StartHomeTab::Recent,
+            score_view_mode: ScoreViewMode::FacingPages,
+            selected_clef: Clef::Treble,
+            selected_dynamic: DynamicMark::Mf,
+            selected_articulation: Articulation::None,
+            selected_ornament: Ornament::None,
+            playback_engine: PlaybackEngine::Notarium,
         }
     }
 }
@@ -618,8 +642,8 @@ impl NotariumApp {
                 for (tab, label) in [
                     (UiTab::File, "File"),
                     (UiTab::Home, "Home"),
-                    (UiTab::NoteInput, "Note Input"),
-                    (UiTab::Notations, "Notations"),
+                    (UiTab::NoteInput, "Notas"),
+                    (UiTab::Notations, "Símbolos"),
                     (UiTab::Play, "Play"),
                     (UiTab::Layout, "Layout"),
                     (UiTab::Appearance, "Appearance"),
@@ -629,72 +653,6 @@ impl NotariumApp {
                 ] {
                     ui.selectable_value(&mut self.active_tab, tab, label);
                 }
-            });
-
-            ui.separator();
-            ui.horizontal_wrapped(|ui| {
-                ui.group(|ui| {
-                    ui.label("Clipboard");
-                    ui.horizontal(|ui| {
-                        let _ = ui.button("Paste");
-                        let _ = ui.button("Copy");
-                        let _ = ui.button("Cut");
-                    });
-                });
-
-                ui.group(|ui| {
-                    ui.label("Instruments");
-                    ui.horizontal(|ui| {
-                        let _ = ui.button("Add");
-                        let _ = ui.button("Remove");
-                        let _ = ui.button("Transpose");
-                    });
-                });
-
-                ui.group(|ui| {
-                    ui.label("Bars / View");
-                    ui.horizontal(|ui| {
-                        let _ = ui.button("Split");
-                        let _ = ui.button("Join");
-                        ui.add(
-                            egui::Slider::new(&mut self.zoom_percent, 40.0..=140.0).text("Zoom"),
-                        );
-                    });
-                });
-
-                ui.group(|ui| {
-                    ui.label("Playback");
-                    ui.horizontal_wrapped(|ui| {
-                        if ui.button("⏮ Retroceder").clicked() {
-                            self.playback.rewind();
-                            self.is_paused = false;
-                        }
-
-                        if ui.button("▶ Play").clicked() {
-                            self.playback.play(self.score.clone(), self.bpm);
-                            self.is_paused = false;
-                        }
-
-                        let pause_label = if self.is_paused {
-                            "⏵ Retomar"
-                        } else {
-                            "⏸ Pausar"
-                        };
-                        if ui.button(pause_label).clicked() {
-                            if self.is_paused {
-                                self.playback.resume();
-                            } else {
-                                self.playback.pause();
-                            }
-                            self.is_paused = !self.is_paused;
-                        }
-
-                        if ui.button("⏹ Parar").clicked() {
-                            self.playback.stop();
-                            self.is_paused = false;
-                        }
-                    });
-                });
             });
 
             ui.separator();
@@ -737,10 +695,11 @@ impl NotariumApp {
         });
 
         egui::SidePanel::left("controls")
-            .resizable(false)
-            .min_width(250.0)
+            .resizable(true)
+            .default_width(300.0)
             .show(ctx, |ui| {
                 ui.heading("Entrada de Notas");
+                ui.label("Clique diretamente na pauta para inserir na posição desejada.");
                 ui.separator();
 
                 egui::ComboBox::from_label("Instrumento")
@@ -755,15 +714,13 @@ impl NotariumApp {
                         }
                     });
 
-                egui::ComboBox::from_label("Altura")
-                    .selected_text(self.selected_pitch.label())
+                egui::ComboBox::from_label("Clave")
+                    .selected_text(self.selected_clef.label())
                     .show_ui(ui, |ui| {
-                        for pitch in PitchClass::ALL {
-                            ui.selectable_value(&mut self.selected_pitch, pitch, pitch.label());
+                        for clef in Clef::ALL {
+                            ui.selectable_value(&mut self.selected_clef, clef, clef.label());
                         }
                     });
-
-                ui.add(egui::Slider::new(&mut self.selected_octave, 1..=7).text("Oitava"));
 
                 egui::ComboBox::from_label("Duração")
                     .selected_text(self.selected_duration.label())
@@ -777,71 +734,240 @@ impl NotariumApp {
                         }
                     });
 
-                ui.add(egui::Slider::new(&mut self.bpm, 40.0..=220.0).text("BPM"));
+                egui::ComboBox::from_label("Dinâmica")
+                    .selected_text(self.selected_dynamic.label())
+                    .show_ui(ui, |ui| {
+                        for dynamic in DynamicMark::ALL {
+                            ui.selectable_value(
+                                &mut self.selected_dynamic,
+                                dynamic,
+                                dynamic.label(),
+                            );
+                        }
+                    });
 
-                if ui.button("Adicionar Nota").clicked() {
-                    self.score.notes.push(NoteEvent {
-                        pitch: Pitch {
+                egui::ComboBox::from_label("Articulação")
+                    .selected_text(self.selected_articulation.label())
+                    .show_ui(ui, |ui| {
+                        for articulation in Articulation::ALL {
+                            ui.selectable_value(
+                                &mut self.selected_articulation,
+                                articulation,
+                                articulation.label(),
+                            );
+                        }
+                    });
+
+                egui::ComboBox::from_label("Ornamento")
+                    .selected_text(self.selected_ornament.label())
+                    .show_ui(ui, |ui| {
+                        for ornament in Ornament::ALL {
+                            ui.selectable_value(
+                                &mut self.selected_ornament,
+                                ornament,
+                                ornament.label(),
+                            );
+                        }
+                    });
+
+                ui.horizontal(|ui| {
+                    ui.label("Modo de visualização:");
+                    ui.selectable_value(
+                        &mut self.score_view_mode,
+                        ScoreViewMode::SinglePage,
+                        "Página única",
+                    );
+                    ui.selectable_value(
+                        &mut self.score_view_mode,
+                        ScoreViewMode::FacingPages,
+                        "Duas páginas",
+                    );
+                });
+
+                if ui.button("Adicionar nota (manual)").clicked() {
+                    self.insert_note_at(
+                        self.score.notes.len(),
+                        self.selected_instrument,
+                        Pitch {
                             class: self.selected_pitch,
                             octave: self.selected_octave,
                         },
-                        duration: self.selected_duration,
-                        instrument: self.selected_instrument,
-                    });
+                    );
                 }
 
                 if ui.button("Limpar Partitura").clicked() {
                     self.score.notes.clear();
                 }
 
-                if ui.button("Play (síntese)").clicked() {
-                    self.playback.play(self.score.clone(), self.bpm);
-                    self.is_paused = false;
-                }
+                ui.separator();
+                ui.collapsing("🎛 Play > Mixer e reprodução", |ui| {
+                    egui::ComboBox::from_label("Engine")
+                        .selected_text(match self.playback_engine {
+                            PlaybackEngine::Notarium => "Notarium Engine",
+                            PlaybackEngine::NotePerformer => "NotePerformer (pré-configuração)",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.playback_engine,
+                                PlaybackEngine::Notarium,
+                                "Notarium Engine",
+                            );
+                            ui.selectable_value(
+                                &mut self.playback_engine,
+                                PlaybackEngine::NotePerformer,
+                                "NotePerformer (pré-configuração)",
+                            );
+                        });
 
+                    if self.playback_engine == PlaybackEngine::NotePerformer {
+                        ui.colored_label(
+                            egui::Color32::LIGHT_BLUE,
+                            "Perfil NotePerformer selecionado (roteamento VST futuro).",
+                        );
+                    }
+
+                    ui.add(egui::Slider::new(&mut self.bpm, 40.0..=220.0).text("BPM"));
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("⏮").clicked() {
+                            self.playback.rewind();
+                            self.is_paused = false;
+                        }
+                        if ui.button("▶ Play").clicked() {
+                            self.playback.play(self.score.clone(), self.bpm);
+                            self.is_paused = false;
+                        }
+                        if ui
+                            .button(if self.is_paused {
+                                "⏵ Retomar"
+                            } else {
+                                "⏸ Pausar"
+                            })
+                            .clicked()
+                        {
+                            if self.is_paused {
+                                self.playback.resume();
+                            } else {
+                                self.playback.pause();
+                            }
+                            self.is_paused = !self.is_paused;
+                        }
+                        if ui.button("⏹").clicked() {
+                            self.playback.stop();
+                            self.is_paused = false;
+                        }
+                    });
+                });
+
+                ui.separator();
+                self.render_notation_catalog(ui);
                 ui.separator();
                 ui.label(format!("Notas inseridas: {}", self.score.notes.len()));
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Visualização Orquestral");
+            ui.heading("Página da Partitura");
+            ui.label("Clique em qualquer pauta para inserir nota na altura/posição exata.");
             ui.separator();
 
             egui::ScrollArea::both().show(ui, |ui| {
-                ui.horizontal_top(|ui| {
-                    notation::draw_orchestral_page(
-                        ui,
-                        &self.score,
-                        &self.orchestral_order,
-                        "Movement II (excerpt) - Page 1",
-                        self.zoom_percent,
-                    );
+                let mut push_placement = |placement: Option<notation::NotePlacement>| {
+                    if let Some(place) = placement {
+                        self.insert_note_at(place.insert_index, place.instrument, place.pitch);
+                    }
+                };
 
-                    ui.add_space(24.0);
+                match self.score_view_mode {
+                    ScoreViewMode::SinglePage => {
+                        let placement = notation::draw_orchestral_page(
+                            ui,
+                            &self.score,
+                            &self.orchestral_order,
+                            "Movement II (excerpt) - Page 1",
+                            self.zoom_percent,
+                        );
+                        push_placement(placement);
+                    }
+                    ScoreViewMode::FacingPages => {
+                        ui.horizontal_top(|ui| {
+                            let placement = notation::draw_orchestral_page(
+                                ui,
+                                &self.score,
+                                &self.orchestral_order,
+                                "Movement II (excerpt) - Page 1",
+                                self.zoom_percent,
+                            );
+                            push_placement(placement);
 
-                    notation::draw_orchestral_page(
-                        ui,
-                        &self.score,
-                        &self.orchestral_order,
-                        "Movement II (excerpt) - Page 2",
-                        self.zoom_percent,
-                    );
-                });
+                            ui.add_space(24.0);
+
+                            let placement = notation::draw_orchestral_page(
+                                ui,
+                                &self.score,
+                                &self.orchestral_order,
+                                "Movement II (excerpt) - Page 2",
+                                self.zoom_percent,
+                            );
+                            push_placement(placement);
+                        });
+                    }
+                }
             });
         });
 
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Page 1 of 2");
+                ui.label(match self.score_view_mode {
+                    ScoreViewMode::SinglePage => "Page 1",
+                    ScoreViewMode::FacingPages => "Page 1-2",
+                });
                 ui.separator();
                 ui.label(format!("Bars: {}", self.score.notes.len().max(1)));
                 ui.separator();
-                ui.label("No Selection");
-                ui.separator();
-                ui.label("Transposing Score");
+                ui.label(format!("Engine: {:?}", self.playback_engine));
                 ui.separator();
                 ui.label(format!("Zoom: {:.1}%", self.zoom_percent));
             });
+        });
+    }
+
+    fn insert_note_at(&mut self, insert_index: usize, instrument: Instrument, pitch: Pitch) {
+        let mut index = 0usize;
+        for (global_idx, note) in self.score.notes.iter().enumerate() {
+            if note.instrument == instrument {
+                if index >= insert_index {
+                    self.score.notes.insert(
+                        global_idx,
+                        NoteEvent {
+                            pitch,
+                            duration: self.selected_duration,
+                            instrument,
+                        },
+                    );
+                    return;
+                }
+                index += 1;
+            }
+        }
+
+        self.score.notes.push(NoteEvent {
+            pitch,
+            duration: self.selected_duration,
+            instrument,
+        });
+    }
+
+    fn render_notation_catalog(&mut self, ui: &mut egui::Ui) {
+        ui.collapsing("📚 Catálogo de notação (fundação)", |ui| {
+            ui.label("Pentagrama: pauta, linhas suplementares, sistemas e claves históricas.");
+            ui.label("Ritmo: semibreve → semifusa + valores irregulares.");
+            ui.label("Altura: acidentes, armadura, modos e escalas.");
+            ui.label("Compasso: simples, compostos, alternados, C e C cortado.");
+            ui.label("Dinâmica: ppp..fff, cresc/dim, sfz/rfz.");
+            ui.label("Articulação: staccato, tenuto, marcato, fermata etc.");
+            ui.label("Ornamentos: trinado, mordente, grupeto, appoggiatura, tremolo.");
+            ui.label("Estrutura: ritornello, D.C., D.S., coda, segno, fine, voltas.");
+            ui.label("Playback pro: humanização, velocity, CC MIDI, VST/NotePerformer.");
+            ui.label("Engraving pro: layout automático, partes, MusicXML, PDF/MIDI/WAV.");
         });
     }
 }
@@ -998,8 +1124,16 @@ fn parse_duration_from_beats(beats: f32) -> DurationValue {
         DurationValue::Whole
     } else if (beats - 2.0).abs() < 0.1 {
         DurationValue::Half
+    } else if (beats - 1.0).abs() < 0.1 {
+        DurationValue::Quarter
     } else if (beats - 0.5).abs() < 0.1 {
         DurationValue::Eighth
+    } else if (beats - 0.25).abs() < 0.05 {
+        DurationValue::Sixteenth
+    } else if (beats - 0.125).abs() < 0.03 {
+        DurationValue::ThirtySecond
+    } else if (beats - 0.0625).abs() < 0.02 {
+        DurationValue::SixtyFourth
     } else {
         DurationValue::Quarter
     }

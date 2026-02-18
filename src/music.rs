@@ -4,10 +4,21 @@ pub enum DurationValue {
     Half,
     Quarter,
     Eighth,
+    Sixteenth,
+    ThirtySecond,
+    SixtyFourth,
 }
 
 impl DurationValue {
-    pub const ALL: [Self; 4] = [Self::Whole, Self::Half, Self::Quarter, Self::Eighth];
+    pub const ALL: [Self; 7] = [
+        Self::Whole,
+        Self::Half,
+        Self::Quarter,
+        Self::Eighth,
+        Self::Sixteenth,
+        Self::ThirtySecond,
+        Self::SixtyFourth,
+    ];
 
     pub fn beats(self) -> f32 {
         match self {
@@ -15,6 +26,9 @@ impl DurationValue {
             Self::Half => 2.0,
             Self::Quarter => 1.0,
             Self::Eighth => 0.5,
+            Self::Sixteenth => 0.25,
+            Self::ThirtySecond => 0.125,
+            Self::SixtyFourth => 0.0625,
         }
     }
 
@@ -24,6 +38,141 @@ impl DurationValue {
             Self::Half => "Mínima",
             Self::Quarter => "Semínima",
             Self::Eighth => "Colcheia",
+            Self::Sixteenth => "Semicolcheia",
+            Self::ThirtySecond => "Fusa",
+            Self::SixtyFourth => "Semifusa",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Clef {
+    Treble,
+    Bass,
+    Alto,
+    Tenor,
+}
+
+impl Clef {
+    pub const ALL: [Self; 4] = [Self::Treble, Self::Bass, Self::Alto, Self::Tenor];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Treble => "Clave de Sol",
+            Self::Bass => "Clave de Fá",
+            Self::Alto => "Clave de Dó (Alto)",
+            Self::Tenor => "Clave de Dó (Tenor)",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DynamicMark {
+    Ppp,
+    Pp,
+    P,
+    Mp,
+    Mf,
+    F,
+    Ff,
+    Fff,
+    Cresc,
+    Dim,
+    Sfz,
+}
+
+impl DynamicMark {
+    pub const ALL: [Self; 11] = [
+        Self::Ppp,
+        Self::Pp,
+        Self::P,
+        Self::Mp,
+        Self::Mf,
+        Self::F,
+        Self::Ff,
+        Self::Fff,
+        Self::Cresc,
+        Self::Dim,
+        Self::Sfz,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Ppp => "ppp",
+            Self::Pp => "pp",
+            Self::P => "p",
+            Self::Mp => "mp",
+            Self::Mf => "mf",
+            Self::F => "f",
+            Self::Ff => "ff",
+            Self::Fff => "fff",
+            Self::Cresc => "cresc.",
+            Self::Dim => "dim.",
+            Self::Sfz => "sfz",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Articulation {
+    None,
+    Staccato,
+    Tenuto,
+    Accent,
+    Marcato,
+    Fermata,
+}
+
+impl Articulation {
+    pub const ALL: [Self; 6] = [
+        Self::None,
+        Self::Staccato,
+        Self::Tenuto,
+        Self::Accent,
+        Self::Marcato,
+        Self::Fermata,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "—",
+            Self::Staccato => "Staccato",
+            Self::Tenuto => "Tenuto",
+            Self::Accent => "Acento",
+            Self::Marcato => "Marcato",
+            Self::Fermata => "Fermata",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ornament {
+    None,
+    Trill,
+    Mordent,
+    Turn,
+    Grace,
+    Tremolo,
+}
+
+impl Ornament {
+    pub const ALL: [Self; 6] = [
+        Self::None,
+        Self::Trill,
+        Self::Mordent,
+        Self::Turn,
+        Self::Grace,
+        Self::Tremolo,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "—",
+            Self::Trill => "Trinado",
+            Self::Mordent => "Mordente",
+            Self::Turn => "Grupeto",
+            Self::Grace => "Acciaccatura",
+            Self::Tremolo => "Tremolo",
         }
     }
 }
