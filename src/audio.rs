@@ -9,7 +9,11 @@ use crate::music::{Instrument, NoteEvent, Score};
 const SAMPLE_RATE: u32 = 44_100;
 
 enum PlaybackCommand {
-    Play { score: Score, bpm: f32 },
+    Play {
+        score: Score,
+        bpm: f32,
+        config: PlaybackConfig,
+    },
     Pause,
     Resume,
     Stop,
@@ -21,9 +25,34 @@ pub struct PlaybackController {
     tx: Sender<PlaybackCommand>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaybackEngine {
+    Notarium,
+    Vst,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaybackConfig {
+    pub engine: PlaybackEngine,
+    pub vst_host: String,
+    pub vst_plugin: String,
+    pub noteperformer_profile: bool,
+}
+
+impl Default for PlaybackConfig {
+    fn default() -> Self {
+        Self {
+            engine: PlaybackEngine::Notarium,
+            vst_host: "Builtin Host".to_owned(),
+            vst_plugin: "".to_owned(),
+            noteperformer_profile: false,
+        }
+    }
+}
+
 impl PlaybackController {
-    pub fn play(&self, score: Score, bpm: f32) {
-        let _ = self.tx.send(PlaybackCommand::Play { score, bpm });
+    pub fn play(&self, score: Score, bpm: f32, config: PlaybackConfig) {
+        let _ = self.tx.send(PlaybackCommand::Play { score, bpm, config });
     }
 
     pub fn pause(&self) {
@@ -57,13 +86,15 @@ fn playback_thread(rx: Receiver<PlaybackCommand>) {
     let mut sink: Option<Sink> = None;
     let mut last_score: Option<Score> = None;
     let mut last_bpm = 110.0;
+    let mut last_config = PlaybackConfig::default();
 
     while let Ok(cmd) = rx.recv() {
         match cmd {
-            PlaybackCommand::Play { score, bpm } => {
+            PlaybackCommand::Play { score, bpm, config } => {
                 last_score = Some(score);
                 last_bpm = bpm;
-                sink = create_sink_with_score(&handle, last_score.as_ref(), last_bpm);
+                last_config = config;
+                sink = create_sink_with_score(&handle, last_score.as_ref(), last_bpm, &last_config);
             }
             PlaybackCommand::Pause => {
                 if let Some(current) = &sink {
@@ -84,7 +115,7 @@ fn playback_thread(rx: Receiver<PlaybackCommand>) {
                 if let Some(current) = sink.take() {
                     current.stop();
                 }
-                sink = create_sink_with_score(&handle, last_score.as_ref(), last_bpm);
+                sink = create_sink_with_score(&handle, last_score.as_ref(), last_bpm, &last_config);
             }
         }
     }
@@ -94,8 +125,14 @@ fn create_sink_with_score(
     handle: &rodio::OutputStreamHandle,
     score: Option<&Score>,
     bpm: f32,
+    config: &PlaybackConfig,
 ) -> Option<Sink> {
     let score = score?;
+
+    if config.engine == PlaybackEngine::Vst {
+        return None;
+    }
+
     let Ok(sink) = Sink::try_new(handle) else {
         return None;
     };
@@ -112,7 +149,7 @@ fn create_sink_with_score(
 }
 
 fn synthesize_note(note: &NoteEvent, duration_s: f32) -> Vec<f32> {
-    let frequency = note.pitch.frequency_hz();
+    let frequency = note.pitch.frequency_hz_with_accidental(note.accidental);
     let sample_count = (duration_s * SAMPLE_RATE as f32).max(1.0) as usize;
     let mut out = Vec::with_capacity(sample_count);
 

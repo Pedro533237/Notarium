@@ -7,6 +7,8 @@ edition = "2021"
 egui = "0.33.2"
 egui_glium = "0.33.2"
 glium = "0.36.0"
+glutin-winit = "0.5.0"
+raw-window-handle = "0.6.2"
 rodio = { version = "0.17", default-features = false }
 
 [dev-dependencies]

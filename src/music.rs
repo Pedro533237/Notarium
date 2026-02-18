@@ -1,13 +1,51 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Accidental {
+    Natural,
+    Sharp,
+    Flat,
+}
+
+impl Accidental {
+    pub const ALL: [Self; 3] = [Self::Natural, Self::Sharp, Self::Flat];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Natural => "♮",
+            Self::Sharp => "♯",
+            Self::Flat => "♭",
+        }
+    }
+
+    pub fn semitone_offset(self) -> i32 {
+        match self {
+            Self::Natural => 0,
+            Self::Sharp => 1,
+            Self::Flat => -1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DurationValue {
     Whole,
     Half,
     Quarter,
     Eighth,
+    Sixteenth,
+    ThirtySecond,
+    SixtyFourth,
 }
 
 impl DurationValue {
-    pub const ALL: [Self; 4] = [Self::Whole, Self::Half, Self::Quarter, Self::Eighth];
+    pub const ALL: [Self; 7] = [
+        Self::Whole,
+        Self::Half,
+        Self::Quarter,
+        Self::Eighth,
+        Self::Sixteenth,
+        Self::ThirtySecond,
+        Self::SixtyFourth,
+    ];
 
     pub fn beats(self) -> f32 {
         match self {
@@ -15,6 +53,9 @@ impl DurationValue {
             Self::Half => 2.0,
             Self::Quarter => 1.0,
             Self::Eighth => 0.5,
+            Self::Sixteenth => 0.25,
+            Self::ThirtySecond => 0.125,
+            Self::SixtyFourth => 0.0625,
         }
     }
 
@@ -24,6 +65,141 @@ impl DurationValue {
             Self::Half => "Mínima",
             Self::Quarter => "Semínima",
             Self::Eighth => "Colcheia",
+            Self::Sixteenth => "Semicolcheia",
+            Self::ThirtySecond => "Fusa",
+            Self::SixtyFourth => "Semifusa",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Clef {
+    Treble,
+    Bass,
+    Alto,
+    Tenor,
+}
+
+impl Clef {
+    pub const ALL: [Self; 4] = [Self::Treble, Self::Bass, Self::Alto, Self::Tenor];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Treble => "Clave de Sol",
+            Self::Bass => "Clave de Fá",
+            Self::Alto => "Clave de Dó (Alto)",
+            Self::Tenor => "Clave de Dó (Tenor)",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DynamicMark {
+    Ppp,
+    Pp,
+    P,
+    Mp,
+    Mf,
+    F,
+    Ff,
+    Fff,
+    Cresc,
+    Dim,
+    Sfz,
+}
+
+impl DynamicMark {
+    pub const ALL: [Self; 11] = [
+        Self::Ppp,
+        Self::Pp,
+        Self::P,
+        Self::Mp,
+        Self::Mf,
+        Self::F,
+        Self::Ff,
+        Self::Fff,
+        Self::Cresc,
+        Self::Dim,
+        Self::Sfz,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Ppp => "ppp",
+            Self::Pp => "pp",
+            Self::P => "p",
+            Self::Mp => "mp",
+            Self::Mf => "mf",
+            Self::F => "f",
+            Self::Ff => "ff",
+            Self::Fff => "fff",
+            Self::Cresc => "cresc.",
+            Self::Dim => "dim.",
+            Self::Sfz => "sfz",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Articulation {
+    None,
+    Staccato,
+    Tenuto,
+    Accent,
+    Marcato,
+    Fermata,
+}
+
+impl Articulation {
+    pub const ALL: [Self; 6] = [
+        Self::None,
+        Self::Staccato,
+        Self::Tenuto,
+        Self::Accent,
+        Self::Marcato,
+        Self::Fermata,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "—",
+            Self::Staccato => "Staccato",
+            Self::Tenuto => "Tenuto",
+            Self::Accent => "Acento",
+            Self::Marcato => "Marcato",
+            Self::Fermata => "Fermata",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ornament {
+    None,
+    Trill,
+    Mordent,
+    Turn,
+    Grace,
+    Tremolo,
+}
+
+impl Ornament {
+    pub const ALL: [Self; 6] = [
+        Self::None,
+        Self::Trill,
+        Self::Mordent,
+        Self::Turn,
+        Self::Grace,
+        Self::Tremolo,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::None => "—",
+            Self::Trill => "Trinado",
+            Self::Mordent => "Mordente",
+            Self::Turn => "Grupeto",
+            Self::Grace => "Acciaccatura",
+            Self::Tremolo => "Tremolo",
         }
     }
 }
@@ -81,16 +257,6 @@ pub enum PitchClass {
 }
 
 impl PitchClass {
-    pub const ALL: [Self; 7] = [
-        Self::C,
-        Self::D,
-        Self::E,
-        Self::F,
-        Self::G,
-        Self::A,
-        Self::B,
-    ];
-
     pub fn semitone_offset(self) -> i32 {
         match self {
             Self::C => 0,
@@ -100,18 +266,6 @@ impl PitchClass {
             Self::G => 7,
             Self::A => 9,
             Self::B => 11,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::C => "C",
-            Self::D => "D",
-            Self::E => "E",
-            Self::F => "F",
-            Self::G => "G",
-            Self::A => "A",
-            Self::B => "B",
         }
     }
 }
@@ -239,8 +393,16 @@ pub struct Pitch {
 }
 
 impl Pitch {
+    #[cfg(test)]
     pub fn frequency_hz(self) -> f32 {
         let midi = (self.octave as i32 + 1) * 12 + self.class.semitone_offset();
+        let semitones_from_a4 = midi - 69;
+        440.0 * 2.0_f32.powf(semitones_from_a4 as f32 / 12.0)
+    }
+
+    pub fn frequency_hz_with_accidental(self, accidental: Accidental) -> f32 {
+        let midi = (self.octave as i32 + 1) * 12 + self.class.semitone_offset();
+        let midi = midi + accidental.semitone_offset();
         let semitones_from_a4 = midi - 69;
         440.0 * 2.0_f32.powf(semitones_from_a4 as f32 / 12.0)
     }
@@ -249,6 +411,7 @@ impl Pitch {
 #[derive(Debug, Clone)]
 pub struct NoteEvent {
     pub pitch: Pitch,
+    pub accidental: Accidental,
     pub duration: DurationValue,
     pub instrument: Instrument,
 }
@@ -292,6 +455,7 @@ mod tests {
                         class: PitchClass::C,
                         octave: 4,
                     },
+                    accidental: Accidental::Natural,
                     duration: DurationValue::Half,
                     instrument: Instrument::Piano,
                 },
@@ -300,6 +464,7 @@ mod tests {
                         class: PitchClass::G,
                         octave: 4,
                     },
+                    accidental: Accidental::Natural,
                     duration: DurationValue::Quarter,
                     instrument: Instrument::Piano,
                 },
