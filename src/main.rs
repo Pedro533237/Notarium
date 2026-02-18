@@ -339,6 +339,7 @@ impl NotariumApp {
                 self.score.notes.remove(index);
             }
             self.selection.set_selected(None, &mut self.visual_notes);
+            self.selection.focus = false;
             self.edit_mode = EditMode::None;
         }
     }
@@ -571,13 +572,32 @@ impl NotariumApp {
                     self.score.notes.clear();
                     self.visual_notes.clear();
                     self.selection = SelectionState::default();
+                    self.selection.focus = false;
                     self.edit_mode = EditMode::None;
                 }
 
-                if ui.button("Play (síntese)").clicked() {
-                    self.playback.play(self.score.clone(), self.bpm);
-                    self.is_paused = false;
-                }
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("▶ Play").clicked() {
+                        self.playback.play(self.score.clone(), self.bpm);
+                        self.is_paused = false;
+                    }
+                    if ui.button("⏸ Pausar").clicked() {
+                        self.playback.pause();
+                        self.is_paused = true;
+                    }
+                    if ui.button("⏵ Retomar").clicked() {
+                        self.playback.resume();
+                        self.is_paused = false;
+                    }
+                    if ui.button("⏹ Parar").clicked() {
+                        self.playback.stop();
+                        self.is_paused = false;
+                    }
+                    if ui.button("⏮ Reiniciar").clicked() {
+                        self.playback.rewind();
+                        self.is_paused = false;
+                    }
+                });
 
                 ui.separator();
                 ui.label("Edição de nota: clique para selecionar, 1..7 muda duração, ↑/↓ move pitch, Delete remove.");
@@ -604,6 +624,7 @@ impl NotariumApp {
                 if let Some(cursor) = primary_click_position(&response) {
                     let hit = self.selection.hit_test(cursor, &overlays);
                     self.selection.set_selected(hit, &mut self.visual_notes);
+                    self.selection.focus = hit.is_some();
                     self.edit_mode = hit.map_or(EditMode::None, EditMode::NoteSelected);
                 }
             });
@@ -611,9 +632,9 @@ impl NotariumApp {
 
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label(format!("Compassos: {:.1}", self.score.total_measures(self.settings.time_signature)));
+                ui.label(format!("Compassos: {:.1} • unidade:{:?}", self.score.total_measures(self.settings.time_signature), self.settings.time_signature.beat_unit()));
                 ui.separator();
-                ui.label(format!("Seleção: {:?}", self.selection.selected_note));
+                ui.label(format!("Seleção: {:?} • foco:{}", self.selection.selected_note, self.selection.focus));
                 ui.separator();
                 ui.label(format!("Zoom: {:.1}%", self.zoom_percent));
                 ui.separator();

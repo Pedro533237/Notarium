@@ -32,7 +32,8 @@ pub fn draw_staff_system(
 }
 
 fn draw_staff(painter: &egui::Painter, rect: Rect, staff: &Staff) {
-    let spacing = rect.height() / (staff.line_count as f32 - 1.0);
+    let spacing =
+        (rect.height() / (staff.line_count as f32 - 1.0)) * staff.line_spacing_ssu.max(0.75);
     for line in 0..staff.line_count {
         let y = rect.top() + line as f32 * spacing;
         painter.line_segment(
@@ -42,14 +43,27 @@ fn draw_staff(painter: &egui::Painter, rect: Rect, staff: &Staff) {
     }
 
     if !staff.measures.is_empty() {
-        let width = rect.width() / staff.measures.len() as f32;
-        for i in 0..=staff.measures.len() {
-            let x = rect.left() + i as f32 * width;
+        let total_width_ssu: f32 = staff.measures.iter().map(|m| m.width_ssu.max(0.1)).sum();
+        for measure in &staff.measures {
+            let progress = if total_width_ssu > 0.0 {
+                (measure.start_beat / total_width_ssu).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let x = rect.left() + rect.width() * progress;
             painter.line_segment(
                 [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
                 Stroke::new(0.8, Color32::from_gray(110)),
             );
         }
+
+        painter.line_segment(
+            [
+                Pos2::new(rect.right(), rect.top()),
+                Pos2::new(rect.right(), rect.bottom()),
+            ],
+            Stroke::new(0.9, Color32::from_gray(90)),
+        );
     }
 }
 
@@ -82,4 +96,22 @@ fn draw_staff_headers(painter: &egui::Painter, rect: Rect, staff: &Staff, zoom: 
         FontId::proportional(12.0 * zoom),
         Color32::from_gray(40),
     );
+
+    painter.text(
+        Pos2::new(rect.left() - 68.0 * zoom, rect.center().y),
+        Align2::CENTER_CENTER,
+        format!("S{}", staff.index + 1),
+        FontId::proportional(10.0 * zoom),
+        Color32::from_gray(70),
+    );
+
+    if let Some(last) = staff.measures.last() {
+        painter.text(
+            Pos2::new(rect.right() - 4.0 * zoom, rect.top() - 10.0 * zoom),
+            Align2::RIGHT_CENTER,
+            format!("m{}", last.index + 1),
+            FontId::proportional(9.0 * zoom),
+            Color32::from_gray(100),
+        );
+    }
 }

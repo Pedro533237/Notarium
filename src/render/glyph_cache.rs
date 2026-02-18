@@ -26,3 +26,16 @@ impl GlyphCache {
         }
     }
 }
+
+impl GlyphCache {
+    pub fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn atlas_checksum(&self) -> usize {
+        self.entries
+            .values()
+            .map(|entry| entry.atlas_index + entry.symbol.len())
+            .sum()
+    }
+}

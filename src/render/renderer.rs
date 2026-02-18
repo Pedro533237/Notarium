@@ -57,7 +57,6 @@ impl Renderer {
         zoom_percent: f32,
         selection: &SelectionState,
     ) -> (egui::Response, Vec<SelectionOverlay>) {
-        let _ = &self.glyph_cache;
         let zoom = (zoom_percent / 100.0).clamp(0.45, 2.0);
         let desired_size = Vec2::new((860.0 * zoom).max(ui.available_width()), 1180.0 * zoom);
         let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click());
@@ -81,25 +80,51 @@ impl Renderer {
         painter.text(
             Pos2::new(rect.center().x, rect.top() + 64.0 * zoom),
             Align2::CENTER_CENTER,
-            format!("{page_label} • {}", self.gl_profile.label()),
+            format!(
+                "{page_label} • {} • glyphs:{} • atlas:{}",
+                self.gl_profile.label(),
+                self.glyph_cache.entry_count(),
+                self.glyph_cache.atlas_checksum()
+            ),
             FontId::proportional(13.0 * zoom),
             Color32::DARK_GRAY,
         );
 
         let mut overlays = Vec::new();
-        let staff_rects = staff_renderer::draw_staff_system(&painter, rect, staff_system, zoom);
-        for (staff_index, staff_rect) in staff_rects.into_iter().enumerate() {
-            if let Some(staff) = staff_system.staffs.get(staff_index) {
-                let staff_notes = filtered_notes(notes, score, staff_index, instruments);
-                let mut rendered =
-                    note_renderer::draw_notes(&painter, staff_rect, staff, &staff_notes);
-                overlays.append(&mut rendered);
-            }
-        }
+        let mut staff_rects = Vec::new();
 
-        for overlay in &overlays {
-            if Some(overlay.note_id) == selection.selected_note {
-                SelectionState::draw_overlay(&painter, overlay);
+        for layer in [
+            RenderLayer::Staff,
+            RenderLayer::Notes,
+            RenderLayer::SelectionOverlay,
+        ] {
+            match layer {
+                RenderLayer::Staff => {
+                    staff_rects =
+                        staff_renderer::draw_staff_system(&painter, rect, staff_system, zoom);
+                }
+                RenderLayer::Notes => {
+                    for (staff_index, staff_rect) in staff_rects.iter().copied().enumerate() {
+                        if let Some(staff) = staff_system.staffs.get(staff_index) {
+                            let staff_notes =
+                                filtered_notes(notes, score, staff_index, instruments);
+                            let mut rendered = note_renderer::draw_notes(
+                                &painter,
+                                staff_rect,
+                                staff,
+                                &staff_notes,
+                            );
+                            overlays.append(&mut rendered);
+                        }
+                    }
+                }
+                RenderLayer::SelectionOverlay => {
+                    for overlay in &overlays {
+                        if Some(overlay.note_id) == selection.selected_note {
+                            SelectionState::draw_overlay(&painter, overlay);
+                        }
+                    }
+                }
             }
         }
 
