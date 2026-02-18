@@ -12,25 +12,19 @@ mod notation;
 
 use egui::{self, ViewportCommand, ViewportId};
 use egui_glium::EguiGlium;
-use glium::backend::glutin::SimpleWindowBuilder;
+use glium::backend::glutin::Display as GliumDisplay;
+use glium::glutin;
 use glium::winit;
 use glium::Surface;
+use glutin_winit::DisplayBuilder;
+use raw_window_handle::HasWindowHandle;
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 
 use music::{
     DurationValue, Instrument, KeySignature, NoteEvent, PaperSize, Pitch, PitchClass, Score,
     ScoreSettings, TimeSignature,
 };
-
-fn panic_payload_message(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        (*message).to_owned()
-    } else if let Some(message) = payload.downcast_ref::<String>() {
-        message.clone()
-    } else {
-        "panic sem mensagem detalhada".to_owned()
-    }
-}
 
 fn main() {
     install_panic_hook();
@@ -50,25 +44,7 @@ fn run_notarium() -> Result<(), String> {
         .with_title("Notarium")
         .with_inner_size(winit::dpi::PhysicalSize::new(1280, 800));
 
-    let previous_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let build_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        SimpleWindowBuilder::new()
-            .set_window_builder(window_attributes)
-            .build(&event_loop)
-    }));
-    std::panic::set_hook(previous_hook);
-
-    let (window, display) = match build_result {
-        Ok(tuple) => tuple,
-        Err(payload) => {
-            let panic_message = panic_payload_message(payload);
-            return Err(format!(
-                "Falha ao criar janela/contexto OpenGL. Detalhes: {panic_message}. \
-Verifique se os drivers de vídeo estão atualizados e se o OpenGL 3.3 está disponível."
-            ));
-        }
-    };
+    let (window, display) = build_display_with_opengl2_fallback(&event_loop, window_attributes)?;
 
     let mut egui = EguiGlium::new(ViewportId::ROOT, &display, &window, &event_loop);
     let mut app = NotariumApp::default();
@@ -118,6 +94,97 @@ Verifique se os drivers de vídeo estão atualizados e se o OpenGL 3.3 está dis
             }
         })
         .map_err(|err| format!("Falha no loop principal da janela: {err}"))
+}
+
+fn build_display_with_opengl2_fallback(
+    event_loop: &winit::event_loop::EventLoop<()>,
+    window_attributes: winit::window::WindowAttributes,
+) -> Result<
+    (
+        winit::window::Window,
+        GliumDisplay<glutin::surface::WindowSurface>,
+    ),
+    String,
+> {
+    use glium::glutin::config::ConfigTemplateBuilder;
+    use glium::glutin::context::{ContextApi, ContextAttributesBuilder, GlProfile, Version};
+    use glium::glutin::display::GetGlDisplay;
+    use glium::glutin::prelude::*;
+    use glium::glutin::surface::SurfaceAttributesBuilder;
+
+    let template = ConfigTemplateBuilder::new();
+    let display_builder = DisplayBuilder::new().with_window_attributes(Some(window_attributes));
+
+    let (window_opt, gl_config) = display_builder
+        .build(event_loop, template, |mut configs| {
+            configs
+                .next()
+                .expect("Nenhuma configuração OpenGL disponível")
+        })
+        .map_err(|err| format!("Falha ao selecionar configuração OpenGL: {err}"))?;
+
+    let window = window_opt.ok_or_else(|| "Falha ao criar janela principal.".to_owned())?;
+
+    let window_handle = window
+        .window_handle()
+        .map_err(|err| format!("Falha ao obter handle da janela: {err}"))?;
+
+    let (w, h): (u32, u32) = window.inner_size().into();
+    let width =
+        NonZeroU32::new(w.max(1)).ok_or_else(|| "Largura inválida da janela.".to_owned())?;
+    let height =
+        NonZeroU32::new(h.max(1)).ok_or_else(|| "Altura inválida da janela.".to_owned())?;
+
+    let surface_attributes = SurfaceAttributesBuilder::<glutin::surface::WindowSurface>::new()
+        .build(window_handle.into(), width, height);
+
+    let surface = unsafe {
+        gl_config
+            .display()
+            .create_window_surface(&gl_config, &surface_attributes)
+            .map_err(|err| format!("Falha ao criar superfície OpenGL: {err}"))?
+    };
+
+    let context_apis = [
+        ContextApi::OpenGl(Some(Version::new(2, 1))),
+        ContextApi::OpenGl(Some(Version::new(2, 0))),
+        ContextApi::Gles(Some(Version::new(2, 0))),
+        ContextApi::OpenGl(None),
+    ];
+
+    let mut errors = Vec::new();
+    let mut current_context = None;
+
+    for api in context_apis {
+        let attributes = ContextAttributesBuilder::new()
+            .with_profile(GlProfile::Compatibility)
+            .with_context_api(api)
+            .build(Some(window_handle.into()));
+
+        let not_current = unsafe { gl_config.display().create_context(&gl_config, &attributes) };
+        match not_current {
+            Ok(ctx) => match ctx.make_current(&surface) {
+                Ok(current) => {
+                    current_context = Some(current);
+                    break;
+                }
+                Err(err) => errors.push(format!("{api:?} (make_current): {err}")),
+            },
+            Err(err) => errors.push(format!("{api:?} (create_context): {err}")),
+        }
+    }
+
+    let context = current_context.ok_or_else(|| {
+        format!(
+            "Falha ao criar janela/contexto OpenGL compatível com OpenGL 2.0. Tentativas: {}",
+            errors.join(" | ")
+        )
+    })?;
+
+    let display = GliumDisplay::new(context, surface)
+        .map_err(|err| format!("Falha ao inicializar renderer glium: {err}"))?;
+
+    Ok((window, display))
 }
 
 #[cfg(target_os = "windows")]
