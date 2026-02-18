@@ -25,7 +25,7 @@ pub fn launch_start_screen(
 ) -> Result<(), DesktopUiError> {
     #[cfg(target_os = "windows")]
     {
-        return show_windows_start_window(project, theme);
+        show_windows_start_window(project, theme)
     }
 
     #[cfg(not(target_os = "windows"))]
