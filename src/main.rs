@@ -10,7 +10,7 @@ mod audio;
 mod music;
 mod notation;
 
-use egui::{self, ViewportId};
+use egui::{self, ViewportCommand, ViewportId};
 use egui_glium::EguiGlium;
 use glium::backend::glutin::SimpleWindowBuilder;
 use glium::winit;
@@ -56,6 +56,7 @@ fn run_notarium() -> Result<(), String> {
                 winit::event::Event::WindowEvent { event, .. } => match event {
                     winit::event::WindowEvent::CloseRequested
                     | winit::event::WindowEvent::Destroyed => {
+                        app.playback.stop();
                         window_target.exit();
                     }
                     winit::event::WindowEvent::Resized(new_size) => {
@@ -317,13 +318,13 @@ impl NotariumApp {
         let bg = egui::Color32::from_rgb(33, 35, 41);
         let panel = egui::Color32::from_rgb(42, 45, 53);
         let accent = egui::Color32::from_rgb(0, 170, 255);
-        ctx.style_mut(|style| {
-            style.visuals.window_fill = panel;
-            style.visuals.panel_fill = bg;
-            style.visuals.widgets.active.bg_fill = accent;
-            style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(64, 67, 76);
-            style.visuals.extreme_bg_color = egui::Color32::from_rgb(31, 33, 39);
-        });
+        let mut visuals = egui::Visuals::dark();
+        visuals.window_fill = panel;
+        visuals.panel_fill = bg;
+        visuals.widgets.active.bg_fill = accent;
+        visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(64, 67, 76);
+        visuals.extreme_bg_color = egui::Color32::from_rgb(31, 33, 39);
+        ctx.set_visuals(visuals);
 
         egui::TopBottomPanel::top("start_top_nav")
             .exact_height(44.0)
@@ -344,6 +345,16 @@ impl NotariumApp {
                         };
                         let _ = ui.add_sized([86.0, 28.0], egui::Button::new(text));
                     }
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add_sized([86.0, 28.0], egui::Button::new("Sair"))
+                            .clicked()
+                        {
+                            self.playback.stop();
+                            ctx.send_viewport_cmd(ViewportCommand::Close);
+                        }
+                    });
                 });
             });
 
@@ -624,6 +635,10 @@ impl NotariumApp {
                 }
                 if ui.button("← Voltar para Início").clicked() {
                     self.screen = AppScreen::Start;
+                }
+                if ui.button("✖ Sair").clicked() {
+                    self.playback.stop();
+                    ctx.send_viewport_cmd(ViewportCommand::Close);
                 }
             });
         });
