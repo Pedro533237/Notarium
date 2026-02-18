@@ -300,19 +300,27 @@ impl NotariumApp {
                     break;
                 }
                 KeyboardAction::Duration(duration) => {
-                    if let Some((idx, note)) = self.find_note_mut(selected) {
-                        note.duration = duration;
+                    if let Some(idx) = self.find_note_index(selected) {
+                        if let Some(note) = self.visual_notes.get_mut(idx) {
+                            note.duration = duration;
+                        }
                         if let Some(evt) = self.score.notes.get_mut(idx) {
                             evt.duration = duration;
                         }
                     }
                 }
                 KeyboardAction::PitchStep(step) => {
-                    if let Some((idx, note)) = self.find_note_mut(selected) {
-                        apply_pitch_step(note, step);
-                        note.staff_position = pitch_to_staff_position(note.pitch);
-                        if let Some(evt) = self.score.notes.get_mut(idx) {
-                            evt.pitch = note.pitch;
+                    if let Some(idx) = self.find_note_index(selected) {
+                        let mut updated_pitch = None;
+                        if let Some(note) = self.visual_notes.get_mut(idx) {
+                            apply_pitch_step(note, step);
+                            note.staff_position = pitch_to_staff_position(note.pitch);
+                            updated_pitch = Some(note.pitch);
+                        }
+                        if let (Some(evt), Some(pitch)) =
+                            (self.score.notes.get_mut(idx), updated_pitch)
+                        {
+                            evt.pitch = pitch;
                         }
                     }
                 }
@@ -320,11 +328,8 @@ impl NotariumApp {
         }
     }
 
-    fn find_note_mut(&mut self, id: NoteId) -> Option<(usize, &mut Note)> {
-        self.visual_notes
-            .iter_mut()
-            .enumerate()
-            .find(|(_, note)| note.id == id)
+    fn find_note_index(&self, id: NoteId) -> Option<usize> {
+        self.visual_notes.iter().position(|note| note.id == id)
     }
 
     fn delete_note(&mut self, id: NoteId) {

@@ -4,7 +4,7 @@ pub mod note;
 pub mod staff;
 
 pub use duration::NoteDuration;
-pub use measure::{Measure, TimeSignature};
+pub use measure::TimeSignature;
 pub use note::{Note, NoteEvent, NoteId, Pitch, PitchClass, StemDirection};
 pub use staff::{Clef, KeySignature, Staff, StaffSystem};
 

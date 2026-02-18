@@ -3,4 +3,4 @@ pub mod note_renderer;
 pub mod renderer;
 pub mod staff_renderer;
 
-pub use renderer::{GlProfile, RenderLayer, Renderer};
+pub use renderer::{GlProfile, Renderer};

@@ -1,4 +1,4 @@
-use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
 
 use crate::editor::{SelectionOverlay, SelectionState};
 use crate::music::{Instrument, Note, Score, StaffSystem};
