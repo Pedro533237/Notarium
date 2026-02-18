@@ -34,6 +34,7 @@ pub struct NotariumUiApp {
 pub enum UiAppError {
     Project(ProjectError),
     Io(std::io::Error),
+    Desktop(String),
 }
 
 impl Display for UiAppError {
@@ -41,6 +42,7 @@ impl Display for UiAppError {
         match self {
             Self::Project(error) => write!(f, "erro de projeto: {error}"),
             Self::Io(error) => write!(f, "erro de IO: {error}"),
+            Self::Desktop(error) => write!(f, "erro de UI desktop: {error}"),
         }
     }
 }
@@ -69,6 +71,23 @@ impl NotariumUiApp {
             home: HomeScreenState::load_from_documents(),
             new_score_data: NewScoreData::default_with_time_signature()?,
             new_score_ui: NewScoreUiState::from_registry(registry),
+            editor: None,
+        })
+    }
+
+    pub fn new_empty() -> Result<Self, UiAppError> {
+        Ok(Self {
+            theme: NotariumTheme::noturno_vermelho(),
+            state: AppState {
+                current_screen: AppScreen::Home,
+            },
+            home: HomeScreenState::load_from_documents(),
+            new_score_data: NewScoreData::default_with_time_signature()?,
+            new_score_ui: NewScoreUiState {
+                query: String::new(),
+                available: Vec::new(),
+                selected_index: None,
+            },
             editor: None,
         })
     }
