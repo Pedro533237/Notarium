@@ -126,15 +126,6 @@ fn show_windows_start_window(
         fn LoadCursorW(h_instance: Hinstance, cursor_name: Lpcwstr) -> Hcursor;
         fn GetModuleHandleW(module_name: Lpcwstr) -> Hinstance;
         fn SetWindowTextW(hwnd: Hwnd, text: Lpcwstr) -> i32;
-        fn CreateMenu() -> Hmenu;
-        fn AppendMenuW(
-            h_menu: Hmenu,
-            u_flags: u32,
-            u_id_new_item: usize,
-            lp_new_item: Lpcwstr,
-        ) -> i32;
-        fn SetMenu(h_wnd: Hwnd, h_menu: Hmenu) -> i32;
-        fn DrawMenuBar(h_wnd: Hwnd) -> i32;
     }
 
     extern "system" fn wnd_proc(hwnd: Hwnd, msg: Uint, wparam: Wparam, lparam: Lparam) -> Lresult {
