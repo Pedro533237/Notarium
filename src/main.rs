@@ -51,7 +51,7 @@ fn show_error_dialog(message: &str) -> Result<(), String> {
             std::ptr::null_mut(),
             text.as_ptr(),
             title.as_ptr(),
-            0x0000_0000 | 0x0000_0010,
+            0x0000_0010,
         )
     };
 
