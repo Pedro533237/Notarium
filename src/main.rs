@@ -1011,9 +1011,11 @@ impl NotariumApp {
     }
 
     fn render_teclado_window(&mut self, ctx: &egui::Context) {
+        let mut keyboard_open = self.keyboard_open;
+
         egui::Window::new("Teclado")
             .default_width(220.0)
-            .open(&mut self.keyboard_open)
+            .open(&mut keyboard_open)
             .resizable(false)
             .show(ctx, |ui| {
                 ui.label("Ferramentas de inserção");
@@ -1055,6 +1057,8 @@ impl NotariumApp {
                     self.keyboard_tab_button(ui, KeyboardPage::All, "All");
                 });
             });
+
+        self.keyboard_open = keyboard_open;
     }
 
     fn tool_button(&mut self, ui: &mut egui::Ui, icon: &str, duration: DurationValue) {
