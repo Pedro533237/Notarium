@@ -50,3 +50,9 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
+
+
+## Tamanho do executável
+
+Em builds sem dependências pesadas de GUI/áudio, o `notarium.exe` pode ficar pequeno (ex.: ~273 KB) e isso é esperado.
+O comportamento correto é: abrir janela nativa no Windows ao executar o `.exe`.

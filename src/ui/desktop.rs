@@ -4,13 +4,15 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesktopUiError {
-    NativeDialogFailure,
+    NativeWindowFailure(&'static str),
 }
 
 impl Display for DesktopUiError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NativeDialogFailure => write!(f, "falha ao abrir interface nativa do Windows"),
+            Self::NativeWindowFailure(msg) => {
+                write!(f, "falha ao abrir interface nativa do Windows: {msg}")
+            }
         }
     }
 }
@@ -23,68 +25,211 @@ pub fn launch_start_screen(
 ) -> Result<(), DesktopUiError> {
     #[cfg(target_os = "windows")]
     {
-        return show_windows_dialog(project, theme);
+        return show_windows_start_window(project, theme);
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = project;
-        let _ = theme;
+        println!(
+            "Notarium {} | {} instrumentos | accent #{:02x}{:02x}{:02x}",
+            project.metadata.title,
+            project.instrument_ids.len(),
+            theme.accent.r,
+            theme.accent.g,
+            theme.accent.b
+        );
         Ok(())
     }
 }
 
 #[cfg(target_os = "windows")]
-fn show_windows_dialog(
+fn show_windows_start_window(
     project: &NotariumProject,
     theme: NotariumTheme,
 ) -> Result<(), DesktopUiError> {
     use std::ffi::c_void;
 
     type Hwnd = *mut c_void;
+    type Hinstance = *mut c_void;
+    type Hcursor = *mut c_void;
+    type Hbrush = *mut c_void;
+    type Hicon = *mut c_void;
+    type Hmenu = *mut c_void;
     type Lpcwstr = *const u16;
+    type Wparam = usize;
+    type Lparam = isize;
+    type Lresult = isize;
+    type Uint = u32;
 
-    const MB_OK: u32 = 0x0000_0000;
-    const MB_ICONINFORMATION: u32 = 0x0000_0040;
+    #[repr(C)]
+    struct WndClassW {
+        style: Uint,
+        lpfn_wnd_proc: extern "system" fn(Hwnd, Uint, Wparam, Lparam) -> Lresult,
+        cb_cls_extra: i32,
+        cb_wnd_extra: i32,
+        h_instance: Hinstance,
+        h_icon: Hicon,
+        h_cursor: Hcursor,
+        hbr_background: Hbrush,
+        lpsz_menu_name: Lpcwstr,
+        lpsz_class_name: Lpcwstr,
+    }
+
+    #[repr(C)]
+    struct Msg {
+        hwnd: Hwnd,
+        message: Uint,
+        w_param: Wparam,
+        l_param: Lparam,
+        time: u32,
+        pt_x: i32,
+        pt_y: i32,
+    }
+
+    const WM_DESTROY: Uint = 0x0002;
+    const WS_OVERLAPPEDWINDOW: u32 = 0x00CF0000;
+    const WS_VISIBLE: u32 = 0x10000000;
+    const CW_USEDEFAULT: i32 = i32::MIN;
+    const CS_HREDRAW: Uint = 0x0002;
+    const CS_VREDRAW: Uint = 0x0001;
+    const IDC_ARROW: usize = 32512;
+    const COLOR_WINDOW: isize = 5;
 
     #[link(name = "user32")]
     extern "system" {
-        fn MessageBoxW(hwnd: Hwnd, text: Lpcwstr, caption: Lpcwstr, typ: u32) -> i32;
+        fn RegisterClassW(lp_wnd_class: *const WndClassW) -> u16;
+        fn CreateWindowExW(
+            dw_ex_style: u32,
+            lp_class_name: Lpcwstr,
+            lp_window_name: Lpcwstr,
+            dw_style: u32,
+            x: i32,
+            y: i32,
+            n_width: i32,
+            n_height: i32,
+            h_wnd_parent: Hwnd,
+            h_menu: Hmenu,
+            h_instance: Hinstance,
+            lp_param: *mut c_void,
+        ) -> Hwnd;
+        fn DefWindowProcW(hwnd: Hwnd, msg: Uint, wparam: Wparam, lparam: Lparam) -> Lresult;
+        fn DispatchMessageW(msg: *const Msg) -> Lresult;
+        fn GetMessageW(msg: *mut Msg, hwnd: Hwnd, min: Uint, max: Uint) -> i32;
+        fn PostQuitMessage(code: i32);
+        fn TranslateMessage(msg: *const Msg) -> i32;
+        fn ShowWindow(hwnd: Hwnd, cmd_show: i32) -> i32;
+        fn UpdateWindow(hwnd: Hwnd) -> i32;
+        fn LoadCursorW(h_instance: Hinstance, cursor_name: Lpcwstr) -> Hcursor;
+        fn GetModuleHandleW(module_name: Lpcwstr) -> Hinstance;
+        fn SetWindowTextW(hwnd: Hwnd, text: Lpcwstr) -> i32;
     }
 
-    let title = "Notarium - Start Screen"
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect::<Vec<u16>>();
+    extern "system" fn wnd_proc(hwnd: Hwnd, msg: Uint, wparam: Wparam, lparam: Lparam) -> Lresult {
+        match msg {
+            WM_DESTROY => {
+                unsafe {
+                    PostQuitMessage(0);
+                }
+                0
+            }
+            _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+        }
+    }
 
-    let summary = format!(
-        "Projeto: {}\nCompositor: {}\nBPM: {}\nInstrumentos: {}\nTema noturno ativo (accent #{:02x}{:02x}{:02x})\n\nBuild .exe OK. Interface nativa carregada.",
+    let class_name = wide("NotariumMainWindow");
+    let title = wide("Notarium - CPU Software Start Screen");
+
+    let instance = unsafe { GetModuleHandleW(std::ptr::null()) };
+    if instance.is_null() {
+        return Err(DesktopUiError::NativeWindowFailure("GetModuleHandleW"));
+    }
+
+    let cursor = unsafe { LoadCursorW(std::ptr::null_mut(), IDC_ARROW as Lpcwstr) };
+
+    let window_class = WndClassW {
+        style: CS_HREDRAW | CS_VREDRAW,
+        lpfn_wnd_proc: wnd_proc,
+        cb_cls_extra: 0,
+        cb_wnd_extra: 0,
+        h_instance: instance,
+        h_icon: std::ptr::null_mut(),
+        h_cursor: cursor,
+        hbr_background: (COLOR_WINDOW + 1) as Hbrush,
+        lpsz_menu_name: std::ptr::null(),
+        lpsz_class_name: class_name.as_ptr(),
+    };
+
+    let class_result = unsafe { RegisterClassW(&window_class) };
+    if class_result == 0 {
+        return Err(DesktopUiError::NativeWindowFailure("RegisterClassW"));
+    }
+
+    let hwnd = unsafe {
+        CreateWindowExW(
+            0,
+            class_name.as_ptr(),
+            title.as_ptr(),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            980,
+            620,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            instance,
+            std::ptr::null_mut(),
+        )
+    };
+
+    if hwnd.is_null() {
+        return Err(DesktopUiError::NativeWindowFailure("CreateWindowExW"));
+    }
+
+    let window_text = wide(&format!(
+        "Notarium | Projeto: {} | Compositor: {} | BPM: {} | Instrumentos: {} | Accent #{:02x}{:02x}{:02x}",
         project.metadata.title,
         project.metadata.composer,
         project.metadata.bpm,
         project.instrument_ids.len(),
         theme.accent.r,
         theme.accent.g,
-        theme.accent.b
-    );
+        theme.accent.b,
+    ));
 
-    let text = summary
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect::<Vec<u16>>();
+    unsafe {
+        let _ = SetWindowTextW(hwnd, window_text.as_ptr());
+        let _ = ShowWindow(hwnd, 1);
+        let _ = UpdateWindow(hwnd);
+    }
 
-    let result = unsafe {
-        MessageBoxW(
-            std::ptr::null_mut(),
-            text.as_ptr(),
-            title.as_ptr(),
-            MB_OK | MB_ICONINFORMATION,
-        )
+    let mut msg = Msg {
+        hwnd: std::ptr::null_mut(),
+        message: 0,
+        w_param: 0,
+        l_param: 0,
+        time: 0,
+        pt_x: 0,
+        pt_y: 0,
     };
 
-    if result == 0 {
-        Err(DesktopUiError::NativeDialogFailure)
-    } else {
-        Ok(())
+    loop {
+        let code = unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) };
+        if code == -1 {
+            return Err(DesktopUiError::NativeWindowFailure("GetMessageW"));
+        }
+        if code == 0 {
+            break;
+        }
+        unsafe {
+            let _ = TranslateMessage(&msg);
+            let _ = DispatchMessageW(&msg);
+        }
     }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn wide(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
 }
