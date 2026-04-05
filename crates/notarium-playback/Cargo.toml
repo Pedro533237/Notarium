@@ -1,0 +1,8 @@
+[package]
+name = "notarium-playback"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cpal = "0.16"
+notarium-core = { path = "../notarium-core" }

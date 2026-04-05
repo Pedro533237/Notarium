@@ -1,67 +1,44 @@
 # Notarium
 
-Notarium é um editor de partituras em Rust com foco em Windows x64.
+Notarium é um editor de notação musical minimalista em Rust (edition 2021), inspirado em Sibelius/MuseScore, com arquitetura modular pronta para expansão.
 
-## O que já está implementado
+## Arquitetura
 
-- Tela de **Início** para criar nova partitura.
-- Configuração inicial de partitura: nome, compositor, tonalidade, fórmula de compasso e tamanho de papel.
-- Interface desktop com `egui` + `glium` (OpenGL puro) para edição.
-- Inserção de notas (altura, oitava, duração e instrumento).
-- Renderização básica de pauta e cabeças de nota.
-- Playback com síntese digital em tempo real e presets de instrumentos orquestrais.
-- Pipeline de CI em GitHub Actions para validar build, testes e gerar binário portable Windows x64.
+O projeto foi dividido em crates internas:
 
-## Requisitos de arquitetura
+- `notarium-core`: teoria musical + modelo de partitura + operações de edição.
+- `notarium-render`: layout/render vetorial de partitura com `egui` shapes.
+- `notarium-playback`: playback básico com `cpal` + metrônomo.
+- `notarium-io`: salvar/carregar `.notarium` (JSON) e exportar `.musicxml`.
+- `notarium` (app): janela principal (`eframe`) e integração de UI.
 
-- O Notarium é suportado apenas em **Windows x64 (64-bit)**.
+Mais detalhes em [`docs/architecture.md`](docs/architecture.md).
 
-## Compatibilidade com PCs antigos (sem aceleração GPU)
+## Funcionalidades MVP
 
-- O app usa backend **OpenGL puro via `glium`** (sem WGPU/Vulkan).
-- Foi ajustado para focar em compatibilidade com PCs antigos que suportam até OpenGL 3.3 / DirectX 10.1.
-- Em falhas de inicialização/execução, o app grava `notarium.log` ao lado do executável e mostra um pop-up de erro no Windows.
+- Inserção de notas por mouse (caneta).
+- Entrada por teclado do PC (A–G, Shift = sustenido, Alt = bemol, setas para oitava).
+- Ferramentas: seleção, borracha e caneta.
+- Zoom + rolagem da partitura.
+- Menu File: New / Open / Save / Export MusicXML.
+- Painel lateral de instrumentos.
+- Barra inferior de transporte: Play / Stop / BPM / Compasso.
+- Renderização de pentagrama vazio (ou com notas) já na abertura.
 
-## Windows portable via GitHub Actions
-
-O workflow gera o artefato **`notarium-windows-portable`** com um arquivo `notarium-windows-portable.zip` (binário x64).
-
-Passos:
-1. Abra a aba **Actions** no GitHub.
-2. Entre em uma execução de workflow com status verde.
-3. Baixe o artefato `notarium-windows-portable`.
-4. Extraia o `.zip`.
-5. Rode `notarium.exe` (sem instalador, estilo portable).
-
-## Sobre alerta do Windows Defender / SmartScreen
-
-Não é possível eliminar 100% dos alertas sem **assinatura digital de código** (certificado EV/OV).
-
-Redução prática de alertas:
-- assinar o executável em release com certificado de código;
-- manter distribuição consistente (mesmo nome/hash por release oficial);
-- publicar releases estáveis e usar reputação de download.
-
-## Melhorias de velocidade de compilação
-
-- CI com cache (`Swatinem/rust-cache`) para reduzir tempo em builds repetidos.
-- Registro crates.io em modo `sparse` no workflow.
-- Dependências com features reduzidas para evitar compilar backends/decoders desnecessários.
-
-## Limites atuais
-
-Este repositório é um **MVP técnico**. Ainda não cobre 100% da notação completa de ferramentas como Sibelius/MuseScore (articulações avançadas, layout editorial completo, VST, MusicXML completo, etc.).
-
-## Como executar
+## Executar
 
 ```bash
 cargo run
 ```
 
-## Como testar
+## Checks
 
 ```bash
-cargo test
-cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
+
+## Exemplo
+
+Veja `examples/create_score.rs`.
