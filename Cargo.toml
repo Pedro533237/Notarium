@@ -3,11 +3,27 @@ name = "notarium"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = [
+  ".",
+  "crates/notarium-core",
+  "crates/notarium-render",
+  "crates/notarium-playback",
+  "crates/notarium-io",
+]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+egui = "0.33"
+
 [dependencies]
-egui = "0.33.2"
-egui_glium = "0.33.2"
-glium = "0.36.0"
-rodio = { version = "0.17", default-features = false }
+eframe = { version = "0.33", default-features = true }
+egui = { workspace = true }
+notarium-core = { path = "crates/notarium-core" }
+notarium-render = { path = "crates/notarium-render" }
+notarium-playback = { path = "crates/notarium-playback" }
+notarium-io = { path = "crates/notarium-io" }
 
 [dev-dependencies]
-approx = "0.5"
+pretty_assertions = "1"
